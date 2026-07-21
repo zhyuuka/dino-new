@@ -42,6 +42,8 @@ var survival_time: float = 0.0
 var score_timer: float = 0.0
 var pop_timer: float = 0.0
 var is_over: bool = false
+var boss_ai: AIDino = null
+var boss_respawn_timer: float = 0.0
 
 # 装饰材质（一次性创建）
 var mat_trunk: StandardMaterial3D
@@ -241,10 +243,27 @@ func _spawn_ecosystem(player_stage: int) -> void:
 	var roster := _build_roster(player_stage)
 	for sid in roster:
 		_spawn_ai(sid, _random_ai_stage(player_stage))
+	_spawn_boss()
+
+
+## 传说霸主：地图上持续游荡的顶级霸王龙（最高成长阶段），作为世界级威胁
+func _spawn_boss() -> void:
+	var ai: AIDino = AIScene.instantiate() as AIDino
+	ai.species_id = "trex"
+	ai.start_growth_stage = DinoSpecies.MAX_STAGE
+	ai.map_radius = MAP_RADIUS
+	var ang: float = randf() * TAU
+	var pos: Vector3 = Vector3(sin(ang), 0.0, cos(ang)) * (MAP_RADIUS - 20.0)
+	ai.global_position = Vector3(pos.x, 1.5, pos.z)
+	ai.died.connect(_on_ai_died)
+	dynamic.add_child(ai)
+	ai_dinos.append(ai)
+	boss_ai = ai
+	hud.show_banner("传说霸主 · 霸王龙出没！")
 
 
 func _build_roster(player_stage: int) -> Array[String]:
-	var roster: Array[String] = ["galli", "galli", "trike", "anky", "raptor", "raptor", "raptor", "carno"]
+	var roster: Array[String] = ["galli", "galli", "galli", "trike", "trike", "anky", "anky", "raptor", "raptor", "raptor", "carno"]
 	if player_stage >= 1:
 		roster.append("carno")
 	if player_stage >= 2:
@@ -346,6 +365,9 @@ func _on_player_died() -> void:
 
 func _on_ai_died(ai: AIDino, by_player: bool) -> void:
 	ai_dinos.erase(ai)
+	if ai == boss_ai:
+		boss_ai = null
+		boss_respawn_timer = 60.0
 	# 生成尸体（按死亡物种上色）
 	var corpse: AICorpse = CorpseScene.instantiate() as AICorpse
 	corpse.species_id = ai.species.id
@@ -373,6 +395,11 @@ func _process(delta: float) -> void:
 		if ai_dinos.size() < TARGET_POP:
 			var sid: String = "galli" if randf() < 0.5 else "raptor"
 			_spawn_ai(sid, _random_ai_stage(player.growth_stage if player != null else 0))
+	# 传说霸主重生
+	if boss_ai == null and boss_respawn_timer > 0.0:
+		boss_respawn_timer -= delta
+		if boss_respawn_timer <= 0.0:
+			_spawn_boss()
 	# 计分刷新
 	score_timer += delta
 	if score_timer >= 0.5:
