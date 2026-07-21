@@ -248,6 +248,7 @@ func _spawn_touch_controls() -> void:
 	touch_controls.jump_pressed.connect(player.try_jump)
 	touch_controls.ability_pressed.connect(player.try_ability)
 	touch_controls.drink_pressed.connect(player.set_drink_held)
+	touch_controls.look_input_changed.connect(player.add_look_delta)
 
 
 # ================= 信号 =================

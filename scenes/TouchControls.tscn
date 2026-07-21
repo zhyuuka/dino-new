@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3 uid="uid://btouchcontrols001"]
+[gd_scene load_steps=4 format=3 uid="uid://btouchcontrols001"]
 
 [ext_resource type="Script" path="res://scripts/ui/TouchControls.gd" id="1_touch"]
 [ext_resource type="Script" path="res://scripts/ui/VirtualJoystick.gd" id="2_joy"]
+[ext_resource type="Script" path="res://scripts/ui/LookControl.gd" id="3_look"]
 
 [node name="TouchControls" type="CanvasLayer"]
 script = ExtResource("1_touch")
@@ -26,6 +27,15 @@ offset_right = 210.0
 offset_bottom = -30.0
 script = ExtResource("2_joy")
 mouse_filter = 0
+
+[node name="LookZone" type="Control" parent="Control"]
+anchors_preset = 0
+anchor_left = 0.45
+anchor_top = 0.0
+anchor_right = 1.0
+anchor_bottom = 0.60
+mouse_filter = 0
+script = ExtResource("3_look")
 
 [node name="BiteButton" type="Button" parent="Control"]
 anchors_preset = 3

@@ -83,7 +83,9 @@ var is_biting: bool = false
 var bite_anim_timer: float = 0.0
 
 var camera_yaw: float = 0.0
+var cam_pitch: float = CAM_PITCH
 var touch_move_input: Vector2 = Vector2.ZERO
+var _look_delta: Vector2 = Vector2.ZERO
 var touch_drink: bool = false
 var _f_held: bool = false
 
@@ -117,7 +119,11 @@ var visual_base_scale: Vector3 = Vector3.ONE
 
 const CAM_YAW_SPEED: float = 2.2
 const CAM_PITCH: float = -0.35
+const CAM_PITCH_MIN: float = -1.15
+const CAM_PITCH_MAX: float = -0.05
 const CAM_HEIGHT: float = 1.7
+const LOOK_SENS: float = 0.005      # 每像素拖动的偏航弧度
+const PITCH_SENS: float = 0.004     # 每像素拖动的俯仰弧度
 const ROT_SPEED: float = 12.0
 const ACCEL: float = 18.0
 const JUMP_VELOCITY: float = 7.5
@@ -138,7 +144,7 @@ func _ready() -> void:
 	# 摄像机不继承玩家旋转
 	spring_arm.top_level = true
 	spring_arm.spring_length = 5.5
-	spring_arm.rotation = Vector3(CAM_PITCH, 0.0, 0.0)
+	spring_arm.rotation = Vector3(cam_pitch, 0.0, 0.0)
 	spring_arm.add_excluded_object(get_rid())
 	# 初始信号
 	health_changed.emit(current_health, max_health)
@@ -260,13 +266,17 @@ func _physics_process(delta: float) -> void:
 	if charge_cooldown_timer > 0.0:
 		charge_cooldown_timer -= delta
 
-	# 摄像机旋转 Q/E
+	# 摄像机旋转 Q/E（桌面）或触屏拖动（手机）
 	var yaw_input: float = 0.0
 	if Input.is_action_pressed("cam_left"):
 		yaw_input += 1.0
 	if Input.is_action_pressed("cam_right"):
 		yaw_input -= 1.0
 	camera_yaw += yaw_input * CAM_YAW_SPEED * delta
+	if _look_delta != Vector2.ZERO:
+		camera_yaw += _look_delta.x * LOOK_SENS
+		cam_pitch = clampf(cam_pitch + _look_delta.y * PITCH_SENS, CAM_PITCH_MIN, CAM_PITCH_MAX)
+		_look_delta = Vector2.ZERO
 
 	_update_camera_position()
 	_update_vitals(delta, sprinting)
@@ -326,7 +336,12 @@ func _update_vitals(delta: float, sprinting: bool) -> void:
 # ================= 摄像机 =================
 func _update_camera_position() -> void:
 	spring_arm.global_position = global_position + Vector3(0.0, CAM_HEIGHT, 0.0)
-	spring_arm.rotation = Vector3(CAM_PITCH, camera_yaw, 0.0)
+	spring_arm.rotation = Vector3(cam_pitch, camera_yaw, 0.0)
+
+
+## 触屏视角拖动增量（由 TouchControls.LookZone 调用）
+func add_look_delta(d: Vector2) -> void:
+	_look_delta += d
 
 
 # ================= 咬击 =================

@@ -8,12 +8,14 @@ signal bite_pressed
 signal jump_pressed
 signal ability_pressed
 signal drink_pressed(held: bool)
+signal look_input_changed(delta: Vector2)
 
 @onready var joystick: VirtualJoystick = $Control/Joystick
 @onready var bite_button: Button = $Control/BiteButton
 @onready var jump_button: Button = $Control/JumpButton
 @onready var ability_button: Button = $Control/AbilityButton
 @onready var drink_button: Button = $Control/DrinkButton
+@onready var look_zone: LookControl = $Control/LookZone
 
 
 func _ready() -> void:
@@ -23,6 +25,7 @@ func _ready() -> void:
 	ability_button.pressed.connect(func(): ability_pressed.emit())
 	drink_button.button_down.connect(func(): drink_pressed.emit(true))
 	drink_button.button_up.connect(func(): drink_pressed.emit(false))
+	look_zone.look_input_changed.connect(func(d: Vector2): look_input_changed.emit(d))
 
 
 func _on_joystick_input(vec: Vector2) -> void:
