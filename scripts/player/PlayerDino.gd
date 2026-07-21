@@ -292,6 +292,7 @@ func _update_stamina(delta: float, moving: bool) -> void:
 		current_stamina = maxi(0, current_stamina - int(STAMINA_DRAIN * delta))
 	else:
 		current_stamina = mini(current_stamina + int(STAMINA_REGEN * delta), STAMINA_MAX)
+	_post_stamina_check()
 	stamina_changed.emit(current_stamina, STAMINA_MAX)
 
 func can_sprint() -> bool:
@@ -330,7 +331,6 @@ func _update_vitals(delta: float, sprinting: bool) -> void:
 		if thirst_starve_timer >= THIRST_STARVE_INTERVAL:
 			thirst_starve_timer -= THIRST_STARVE_INTERVAL
 			take_damage(THIRST_STARVE_DAMAGE)
-	_post_stamina_check()
 
 
 # ================= 摄像机 =================
