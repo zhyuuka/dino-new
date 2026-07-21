@@ -1,17 +1,20 @@
 class_name AICorpse
 extends StaticBody3D
-## AI 恐龙尸体：玩家走到附近按咬键可吃
-## - 15 秒后自动消失
-## - 可吃 2 口，每口回 30 饥饿 + 10 血量
-## - 吃完 2 口立即消失
-## - 视觉：变暗 + 躺倒（绕 X 轴旋转 90 度）
-## 物理层 layer 3 (AI)，被玩家 BiteArea 检测
+## AI / 玩家恐龙尸体：肉食者（玩家或 AI）可走到附近咬食回饥饿
+## - 一段时间后自动消失
+## - 可吃若干口，吃完立即消失
+## - 躺在地上、按死亡物种上色后变暗
+## 物理层 layer 3 (AI)，被玩家 / AI 的咬击与寻食检测（group "corpse"）
 
-const LIFETIME: float = 15.0
-const MAX_BITES: int = 2
+const LIFETIME: float = 20.0
+const MAX_BITES: int = 3
 const FADE_DURATION: float = 0.4
 
-@onready var dino_visual: Node3D = $DinoVisual
+# 由 Main 在生成时按死亡物种设置
+var species_id: String = ""
+var species_colors: Array = []
+
+@onready var dino_visual: DinoVisual = $DinoVisual
 
 var bites_remaining: int = MAX_BITES
 var lifetime_timer: float = LIFETIME
@@ -19,14 +22,16 @@ var is_being_destroyed: bool = false
 
 
 func _ready() -> void:
-	# 躺倒：绕 X 轴旋转 90 度（侧躺）
-	dino_visual.rotation = Vector3(deg_to_rad(90.0), 0.0, 0.0)
-	# 材质变暗
-	for csg in dino_visual.find_children("*", "CSGBox3D", true, true):
-		if csg.material is StandardMaterial3D:
-			var mat: StandardMaterial3D = (csg.material as StandardMaterial3D).duplicate() as StandardMaterial3D
-			mat.albedo_color = mat.albedo_color.darkened(0.55)
-			csg.material = mat
+	add_to_group("corpse")
+	var b: Color = Color(0.5, 0.4, 0.3)
+	var d: Color = Color(0.3, 0.25, 0.15)
+	if species_colors.size() >= 2 and species_colors[0] is Color:
+		b = species_colors[0]
+		d = species_colors[1]
+	if species_id == "":
+		species_id = "raptor"
+	# 加载模型并放倒、变暗（尸体表现由 DinoVisual 处理）
+	dino_visual.setup(species_id, b, d, {"corpse": true})
 
 
 func _process(delta: float) -> void:
@@ -37,31 +42,19 @@ func _process(delta: float) -> void:
 		_fade_out_and_free()
 
 
-## 玩家尝试吃尸体。返回 true 表示吃成功，false 表示尸体已无剩余
+## 尝试吃尸体一口。成功返回 true
 func try_eat() -> bool:
 	if is_being_destroyed or bites_remaining <= 0:
 		return false
 	bites_remaining -= 1
-	# 受吃反馈：轻微缩放后回位
-	var original_scale: Vector3 = dino_visual.scale
-	var tween: Tween = create_tween()
-	tween.tween_property(dino_visual, "scale", original_scale * 1.1, 0.05)
-	tween.tween_property(dino_visual, "scale", original_scale, 0.12)
+	dino_visual.pulse_damage()
 	if bites_remaining <= 0:
-		# 最后一口吃完，淡出消失
 		_fade_out_and_free()
 	return true
 
 
-## 淡出并销毁
 func _fade_out_and_free() -> void:
 	if is_being_destroyed:
 		return
 	is_being_destroyed = true
-	var tween: Tween = create_tween()
-	for csg in dino_visual.find_children("*", "CSGBox3D", true, true):
-		if csg.material is StandardMaterial3D:
-			var mat: StandardMaterial3D = csg.material as StandardMaterial3D
-			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-			tween.parallel().tween_property(mat, "albedo_color:a", 0.0, FADE_DURATION)
-	tween.chain().tween_callback(queue_free)
+	dino_visual.fade_out(queue_free)

@@ -1,203 +1,209 @@
-[gd_scene load_steps=6 format=3 uid="uid://bhudsceeeene01x"]
+[gd_scene load_steps=2 format=3 uid="uid://b9hud2dino01ph"]
 
 [ext_resource type="Script" path="res://scripts/ui/HUD.gd" id="1_hud"]
-
-[sub_resource type="StyleBoxFlat" id="sb_health_fill"]
-bg_color = Color(0.3, 0.85, 0.3, 1)
-corner_radius_top_left = 4
-corner_radius_top_right = 4
-corner_radius_bottom_right = 4
-corner_radius_bottom_left = 4
-
-[sub_resource type="StyleBoxFlat" id="sb_hunger_fill"]
-bg_color = Color(0.95, 0.8, 0.2, 1)
-corner_radius_top_left = 4
-corner_radius_top_right = 4
-corner_radius_bottom_right = 4
-corner_radius_bottom_left = 4
-
-[sub_resource type="StyleBoxFlat" id="sb_evolve_fill"]
-bg_color = Color(0.9, 0.65, 0.2, 1)
-corner_radius_top_left = 4
-corner_radius_top_right = 4
-corner_radius_bottom_right = 4
-corner_radius_bottom_left = 4
-
-[sub_resource type="StyleBoxFlat" id="sb_evolve_bg"]
-bg_color = Color(0.15, 0.1, 0.05, 0.7)
-corner_radius_top_left = 4
-corner_radius_top_right = 4
-corner_radius_bottom_right = 4
-corner_radius_bottom_left = 4
 
 [node name="HUD" type="CanvasLayer"]
 script = ExtResource("1_hud")
 
 [node name="Control" type="Control" parent="."]
-layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-mouse_filter = 2
+grow_horizontal = 2
+grow_vertical = 2
 
 [node name="HealthBar" type="ProgressBar" parent="Control"]
-layout_mode = 1
-offset_left = 20.0
-offset_top = 20.0
-offset_right = 240.0
-offset_bottom = 56.0
-max_value = 10.0
-value = 10.0
+offset_left = 12.0
+offset_top = 12.0
+offset_right = 172.0
+offset_bottom = 30.0
 show_percentage = false
-theme_override_styles/foreground = SubResource("sb_health_fill")
 
 [node name="HealthLabel" type="Label" parent="Control/HealthBar"]
 layout_mode = 1
-anchor_left = 0.0
-anchor_top = 0.0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 8.0
-offset_top = 4.0
-offset_right = -8.0
-offset_bottom = -4.0
-horizontal_alignment = 1
-vertical_alignment = 1
-text = "10 / 10"
-
-[node name="HungerBar" type="ProgressBar" parent="Control"]
-layout_mode = 1
-offset_left = 20.0
-offset_top = 60.0
-offset_right = 240.0
-offset_bottom = 96.0
-max_value = 100.0
-value = 100.0
-show_percentage = false
-theme_override_styles/foreground = SubResource("sb_hunger_fill")
-
-[node name="HungerLabel" type="Label" parent="Control/HungerBar"]
-layout_mode = 1
-anchor_left = 0.0
-anchor_top = 0.0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 8.0
-offset_top = 4.0
-offset_right = -8.0
-offset_bottom = -4.0
-horizontal_alignment = 1
-vertical_alignment = 1
-text = "100 / 100"
-
-[node name="EvolutionLabel" type="Label" parent="Control"]
-layout_mode = 1
-offset_left = 20.0
-offset_top = 102.0
-offset_right = 240.0
-offset_bottom = 130.0
-horizontal_alignment = 0
-vertical_alignment = 1
-text = "幼龙 Lv.1"
-
-[node name="KillLabel" type="Label" parent="Control"]
-layout_mode = 1
-anchor_left = 1.0
-anchor_top = 0.0
-anchor_right = 1.0
-anchor_bottom = 0.0
-offset_left = -200.0
-offset_top = 24.0
-offset_right = -20.0
-offset_bottom = 50.0
-horizontal_alignment = 2
-text = "击杀: 0"
-
-[node name="EvolutionProgressBar" type="ProgressBar" parent="Control"]
-layout_mode = 1
-anchor_left = 1.0
-anchor_top = 0.0
-anchor_right = 1.0
-anchor_bottom = 0.0
-offset_left = -200.0
-offset_top = 56.0
-offset_right = -20.0
-offset_bottom = 84.0
-max_value = 5.0
-value = 0.0
-show_percentage = false
-theme_override_styles/foreground = SubResource("sb_evolve_fill")
-theme_override_styles/background = SubResource("sb_evolve_bg")
-
-[node name="EvolutionProgressLabel" type="Label" parent="Control/EvolutionProgressBar"]
-layout_mode = 1
-anchor_left = 0.0
-anchor_top = 0.0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 8.0
-offset_top = 2.0
-offset_right = -8.0
-offset_bottom = -2.0
-horizontal_alignment = 1
-vertical_alignment = 1
-text = "进化进度 0/5"
-
-[node name="EvolutionBanner" type="Label" parent="Control"]
-visible = false
-layout_mode = 1
+anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -250.0
-offset_top = -60.0
-offset_right = 250.0
-offset_bottom = 0.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "血"
+
+[node name="HungerBar" type="ProgressBar" parent="Control"]
+offset_left = 12.0
+offset_top = 38.0
+offset_right = 172.0
+offset_bottom = 56.0
+show_percentage = false
+
+[node name="HungerLabel" type="Label" parent="Control/HungerBar"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+grow_horizontal = 2
+grow_vertical = 2
+text = "饿"
+
+[node name="ThirstBar" type="ProgressBar" parent="Control"]
+offset_left = 12.0
+offset_top = 64.0
+offset_right = 172.0
+offset_bottom = 82.0
+show_percentage = false
+
+[node name="ThirstLabel" type="Label" parent="Control/ThirstBar"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+grow_horizontal = 2
+grow_vertical = 2
+text = "渴"
+
+[node name="StaminaBar" type="ProgressBar" parent="Control"]
+offset_left = 12.0
+offset_top = 90.0
+offset_right = 172.0
+offset_bottom = 108.0
+show_percentage = false
+
+[node name="StaminaLabel" type="Label" parent="Control/StaminaBar"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+grow_horizontal = 2
+grow_vertical = 2
+text = "力"
+
+[node name="GrowthLabel" type="Label" parent="Control"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -168.0
+offset_top = 12.0
+offset_right = -118.0
+offset_bottom = 28.0
+text = "成长"
+
+[node name="GrowthBar" type="ProgressBar" parent="Control"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -110.0
+offset_top = 12.0
+offset_right = 110.0
+offset_bottom = 28.0
+show_percentage = false
+
+[node name="StageLabel" type="Label" parent="Control/GrowthBar"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+grow_horizontal = 2
+grow_vertical = 2
+text = "幼体"
+
+[node name="SpeciesLabel" type="Label" parent="Control"]
+anchors_preset = 9
+anchor_left = 1.0
+anchor_top = 0.0
+anchor_right = 1.0
+anchor_bottom = 0.0
+offset_left = -260.0
+offset_top = 12.0
+offset_right = -12.0
+offset_bottom = 34.0
+text = "物种"
+horizontal_alignment = 2
+
+[node name="ScoreLabel" type="Label" parent="Control"]
+anchors_preset = 9
+anchor_left = 1.0
+anchor_top = 0.0
+anchor_right = 1.0
+anchor_bottom = 0.0
+offset_left = -260.0
+offset_top = 40.0
+offset_right = -12.0
+offset_bottom = 62.0
+text = "计分"
+horizontal_alignment = 2
+
+[node name="MenuButton" type="Button" parent="Control"]
+anchors_preset = 9
+anchor_left = 1.0
+anchor_top = 0.0
+anchor_right = 1.0
+anchor_bottom = 0.0
+offset_left = -102.0
+offset_top = 70.0
+offset_right = -12.0
+offset_bottom = 104.0
+text = "菜单"
+
+[node name="Banner" type="Label" parent="Control"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = -120.0
+offset_right = 300.0
+offset_bottom = -60.0
+text = ""
 horizontal_alignment = 1
 vertical_alignment = 1
-text = "进化为【XX】！"
+autowrap_mode = 2
 
 [node name="HintLabel" type="Label" parent="Control"]
-layout_mode = 1
+anchors_preset = 7
 anchor_left = 0.5
 anchor_top = 1.0
 anchor_right = 0.5
 anchor_bottom = 1.0
 offset_left = -250.0
-offset_top = -90.0
+offset_top = -42.0
 offset_right = 250.0
-offset_bottom = -30.0
+offset_bottom = -14.0
+text = ""
 horizontal_alignment = 1
-vertical_alignment = 1
-text = "咬死恐龙吃尸体回饥饿，吃果子也能少量回饥饿"
+autowrap_mode = 2
 
-[node name="GameOverLabel" type="Label" parent="Control"]
-visible = false
+[node name="DeathPanel" type="ColorRect" parent="Control"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.6)
+
+[node name="DeathLabel" type="Label" parent="Control/DeathPanel"]
 layout_mode = 1
+anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -200.0
-offset_top = -40.0
-offset_right = 200.0
-offset_bottom = 40.0
+grow_horizontal = 2
+grow_vertical = 2
+text = ""
 horizontal_alignment = 1
 vertical_alignment = 1
-text = "游戏结束"
-
-[node name="VictoryLabel" type="Label" parent="Control"]
-visible = false
-layout_mode = 1
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -200.0
-offset_top = -40.0
-offset_right = 200.0
-offset_bottom = 40.0
-horizontal_alignment = 1
-vertical_alignment = 1
-text = "胜利"
+autowrap_mode = 2

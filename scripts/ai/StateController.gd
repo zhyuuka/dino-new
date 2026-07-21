@@ -1,11 +1,10 @@
 class_name StateController
 extends Node
-## AI 状态机控制器
-## 维护 AI 恐龙的当前状态、停留时间，并发出状态切换信号
-## 状态枚举：
-##   WANDER（游荡）/ CHASE（追击）/ FLEE（逃跑）/ DEAD（死亡）/ SEEK_FOOD（寻找果子，食草 AI 专用）
+## AI 状态机控制器：记录当前状态与停留时间，发出状态切换信号。
+## 状态含义：
+##   WANDER 游荡 / HUNT 猎食 / FLEE 逃跑 / GRAZE 吃草 / DRINK 饮水 / REST 休憩 / DEAD 死亡
 
-enum State { WANDER, CHASE, FLEE, DEAD, SEEK_FOOD }
+enum State { WANDER, HUNT, FLEE, GRAZE, DRINK, REST, DEAD }
 
 signal state_changed(old_state: State, new_state: State)
 
@@ -26,7 +25,7 @@ func _physics_process(delta: float) -> void:
 	state_time += delta
 
 
-## 切换到新状态；若与当前状态相同则忽略
+## 切换状态；与当前相同则忽略
 func transition_to(new_state: State) -> void:
 	if new_state == current_state:
 		return

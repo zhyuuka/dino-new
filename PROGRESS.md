@@ -39,6 +39,7 @@
 - [x] 死亡惩罚：保留进化等级，重开时饥饿/血量回满、AI/果子重新生成
 - [x] 编译通过（--import 无错）
 - [x] APK 打包成功（47.3MB）
+- 注：第 2 阶段 APK 体积较大，是因为当时仍用几何体占位 + 未压缩资源；模型替换与纹理压缩优化后体积已大幅下降（见下方第 2.5 阶段）
 
 ## 第 2 阶段交付物
 - 新增文件：
@@ -52,6 +53,34 @@
   - scripts/ui/HUD.gd + scenes/HUD.tscn（加饥饿条/进化等级/进化进度/横幅）
   - scripts/game/Main.gd（串联所有系统，2 肉食 + 3 食草 AI 生成）
 - APK：build/dino-world-debug.apk（47.3MB，arm64-v8a，已签名）
+
+## 第 2.5 阶段目标（模型替换，已完成 2026-07-22）
+> 用户要求：把 CSG 几何体占位恐龙，换成**免费的现成 3D 模型**（CC0 可商用）。
+
+- [x] 选定 6 个 CC0 恐龙模型（全部免费、可商用、已本地化）：
+  - `raptor.glb` 迅猛龙（Quaternius 带动画：Idle/Walk/Run/Attack/Death/Jump）
+  - `trike.glb` 三角龙（Quaternius 带动画）
+  - `trex.glb` 霸王龙（Poly Pizza 带动画）
+  - `anky.glb` 剑龙（Quaternius Stegosaurus 带动画，作剑龙代理）
+  - `carno.glb` 装甲异特龙（静态 208 网格模型，作装甲异特龙代理）
+  - `galli.glb` 鸵鸟（静态带贴图模型，似鸡龙/长途奔走代理）
+- [x] 新增统一模型加载器 `scripts/world/DinoVisual.gd`：
+  - 从 `res://assets/models/<species_id>.glb` 实例化
+  - 按 AABB 自动归一化缩放到参考长度 ~2.2m，再按成长倍率放大
+  - 自动收集骨骼动画 clip（idle/walk/run/attack）并按移动状态播放
+  - 尸体：变暗 + 放倒 + 淡出
+  - 静态模型（carno/galli）：用轻微呼吸/摆动代替骨骼动画
+- [x] 移除 PlayerDino / AIDino / AICorpse 三个场景与脚本里的所有 CSG 占位几何体
+- [x] 修复 `play_locomotion` 动画名 bug（之前传了字典 key 而非真实 clip 名，导致 "Animation not found"）
+- [x] 触屏控制确认完整接好：摇杆→移动、咬/跳/技能/喝水按钮全部 connect
+- [x] 屏幕方向锁定为横屏（project.godot `window/handheld/orientation=1`），沉浸模式已开
+- [x] 重新导出 Android Debug APK（29.6MB，arm64-v8a，v1/v2/v3 签名全通过，横屏锁定写入 manifest）
+
+### 模型来源说明（代理选择理由）
+- anky 用 Quaternius 的 **Stegosaurus**（剑龙）而非真正甲龙——CC0 资源中最接近"带背板的食草恐龙"
+- carno 用 **Armored Allosaurus** 静态模型作装甲异特龙代理（CC0 无合适甲龙带动画资源）
+- galli 用 **Ostrich**（鸵鸟）作似鸡龙/长途奔走型代理，体现"快、胆小、群居"特性
+- 若后续找到更贴合的 CC0 模型，替换 `assets/models/<id>.glb` 即可，无需改代码（DinoVisual 按文件名自动加载）
 
 ## 第 3 阶段目标（待办）
 - 扩大地图（更大地形 + 更多装饰）
@@ -101,6 +130,26 @@ textures/vram_compression/import_etc2_astc=true
 - 委托子 Agent 实现第 1 阶段代码（场景 + 玩家恐龙 + AI 恐龙 + 触屏操控 + HUD）
 - 子 Agent 完成后重新打包 APK 并交付用户
 
+## 最新会话状态（2026-07-22：模型替换 + APK 交付）
+
+### 已完成（本次会话）
+- 修复 `DinoVisual.play_locomotion` 动画名 bug（传 `_clips[name]` 而非 key `name`），headless 运行 15 秒零脚本/编译/动画报错
+- 恢复 `Main.gd` 的 `skip_select=false`，首次启动会先弹**选种界面**（玩家开局选物种）
+- 把 3 个恐龙场景的 CSG 占位几何体全部替换为 6 个 CC0 现成 GLB 模型
+- 确认触屏控制完整：虚拟摇杆 + 咬/跳/技能/喝水按钮均已 connect 到 PlayerDino
+- 屏幕方向锁横屏 + 沉浸模式，重新导出 APK 并写进 manifest（`screenOrientation=0x1`）
+- 导出成功：`build/dino-world-debug.apk`（29.6MB，arm64-v8a，apksigner 验证 v1/v2/v3 全通过）
+- 这是纯手机游戏：landscape 锁屏、触屏操作、arm64 原生库、已签名可直接装安卓手机
+
+### 验证结果
+- Headless 运行：`ERROR: Condition "!is_inside_tree()"` 仅 1 条（来自 SpringArm3D 启动阶段取 global_transform 的良性警告，Godot 4 headless 通病，不影响运行）
+- APK 校验：`apksigner verify` 通过；`aapt dump badging` 显示 package=com.dinoworld.game，含 lib/arm64-v8a/libgodot_android.so
+
+### 待办（后续会话）
+- 第 3 阶段：扩地图、加多种恐龙、加探索/资源点
+- 可选：为 carno/galli 静态模型补一套简单骨骼动画，或替换更贴合的 CC0 模型
+- git 提交推送（见下方"跨会话恢复指令"）
+
 ## 关键技术决定（备忘）
 1. **不用 Unity**：Unity Editor 必须图形界面，沙箱跑不了。Godot 4.x 可命令行导出 APK。
 2. **第 1 阶段单机**：不做联机，专注核心玩法跑通。
@@ -123,8 +172,9 @@ export PATH=$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tool
 
 ## 打包 APK 命令
 ```bash
-cd /workspace
-./tools/godot --headless --export-debug "Android Debug"
+cd /workspace/dino-world
+export ANDROID_HOME=/workspace/tools/android-sdk ANDROID_SDK_ROOT=/workspace/tools/android-sdk
+/workspace/tools/godot --headless --export-debug "Android Debug" build/dino-world-debug.apk
 # 产物：build/dino-world-debug.apk
 ```
 

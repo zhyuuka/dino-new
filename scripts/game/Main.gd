@@ -1,196 +1,340 @@
 extends Node3D
-## 主场景控制器：负责生成玩家、AI、尸体、果子、HUD、触屏控制，并管理游戏循环
-## - 监听玩家咬击 → 对 AI 造成伤害 / 吃尸体
-## - 监听 AI 死亡 → 生成尸体替换、累计击杀、检测胜利
-## - 监听果子被吃 → 玩家回饥饿 / 食草 AI 回血
-## - 监听玩家饥饿/进化 → 更新 HUD
-## - 监听玩家死亡 → 显示游戏结束并 3 秒后重开（保留进化等级）
+## 主场景控制器：选种 → 生成世界（扩图 + 湖泊 + 植物 + 生态恐龙 + 玩家）→ 生存计分 → 死亡续关
+## 设计要点（对照《诅咒之岛》）：
+## - 开局选物种；死亡保留成长、代际+1，下一局接着变强（可存档一直升级）
+## - 地图扩大到 160×160，含湖泊水源、干旱生物群系、散布植被
+## - 生态由多物种恐龙构成真实食物链，并随玩家成长出现更强掠食者
 
 const PlayerScene: PackedScene = preload("res://scenes/PlayerDino.tscn")
 const AIScene: PackedScene = preload("res://scenes/AIDino.tscn")
 const CorpseScene: PackedScene = preload("res://scenes/AICorpse.tscn")
-const FoodSpawnerScene: PackedScene = preload("res://scenes/FoodSpawner.tscn")
+const WaterScene: PackedScene = preload("res://scenes/WaterSource.tscn")
+const FoliageSpawnerScene: PackedScene = preload("res://scenes/FoliageSpawner.tscn")
 const HUDScene: PackedScene = preload("res://scenes/HUD.tscn")
 const TouchControlsScene: PackedScene = preload("res://scenes/TouchControls.tscn")
+const SpeciesSelectScene: PackedScene = preload("res://scenes/SpeciesSelect.tscn")
 
-# AI 生成配置：2 肉食 + 3 食草
-const CARNIVORE_COUNT: int = 2
-const HERBIVORE_COUNT: int = 3
-const AI_SPAWN_RADIUS: float = 14.0
-const PLAYER_SPAWN_Y: float = 1.5
-const RESTART_DELAY: float = 3.0
+# 首次启动是否跳过选种界面（交付时必须为 false，让玩家先选物种）
+static var skip_select: bool = false
 
-# 尸体食物回复量
-const CORPSE_HUNGER_AMOUNT: int = 30
-const CORPSE_HEAL_AMOUNT: int = 10
-# 果子食物回复量（玩家）
-const BERRY_HUNGER_AMOUNT: int = 5
+const MAP_RADIUS: float = 78.0
+const LAKE_POS: Vector3 = Vector3(-40.0, 0.0, 40.0)
+const LAKE_RADIUS: float = 18.0
+const PLAYER_SPAWN: Vector3 = Vector3(0.0, 1.5, 0.0)
+const TARGET_POP: int = 10
+const RESPAWN_CHECK: float = 12.0
 
 var player: PlayerDino
 var ai_dinos: Array[AIDino] = []
-var corpses: Array[AICorpse] = []
-var food_spawner: FoodSpawner
+var dynamic: Node3D
 var hud: HUD
 var touch_controls: TouchControls
+var species_select: SpeciesSelect
+
 var kill_count: int = 0
-var is_game_over: bool = false
-var restart_timer: float = 0.0
+var survival_time: float = 0.0
+var score_timer: float = 0.0
+var pop_timer: float = 0.0
+var is_over: bool = false
+
+# 装饰材质（一次性创建）
+var mat_trunk: StandardMaterial3D
+var mat_foliage: StandardMaterial3D
+var mat_rock: StandardMaterial3D
 
 
 func _ready() -> void:
 	randomize()
-	_spawn_food_spawner()
-	_spawn_player()
-	_spawn_ai()
+	dynamic = $Dynamic
+	mat_trunk = StandardMaterial3D.new()
+	mat_trunk.albedo_color = Color(0.4, 0.25, 0.15)
+	mat_trunk.roughness = 0.9
+	mat_foliage = StandardMaterial3D.new()
+	mat_foliage.albedo_color = Color(0.2, 0.45, 0.18)
+	mat_foliage.roughness = 0.85
+	mat_rock = StandardMaterial3D.new()
+	mat_rock.albedo_color = Color(0.5, 0.5, 0.52)
+	mat_rock.roughness = 0.95
+
+	if not skip_select:
+		_show_species_select()
+	else:
+		skip_select = false
+		_continue_game()
+
+
+func _show_species_select() -> void:
+	species_select = SpeciesSelectScene.instantiate() as SpeciesSelect
+	dynamic.add_child(species_select)
+	species_select.selected.connect(_on_species_selected)
+
+
+func _on_species_selected(species_id: String, is_continue: bool) -> void:
+	if species_select != null:
+		species_select.queue_free()
+		species_select = null
+	_start_game(species_id, is_continue)
+
+
+func _continue_game() -> void:
+	var d: Dictionary = SaveManager.load_save()
+	var sid: String = d.get("species_id", "raptor")
+	_start_game(sid, true)
+
+
+func _start_game(species_id: String, is_continue: bool) -> void:
+	var d: Dictionary = SaveManager.load_save()
+	var stage: int = 0
+	var gen: int = 1
+	if is_continue and d.has("species_id"):
+		species_id = d["species_id"]
+		stage = d.get("growth_stage", 0)
+		gen = d.get("generation", 1)
+	else:
+		d["species_id"] = species_id
+		d["growth_stage"] = 0
+		d["generation"] = 1
+		SaveManager.write_save(d)
+		gen = 1
+
+	kill_count = 0
+	survival_time = 0.0
+	is_over = false
+
+	_spawn_water()
+	_spawn_foliage()
+	_spawn_decor()
 	_spawn_hud()
+	_spawn_player(species_id, stage, gen)
+	_spawn_ecosystem(stage)
 	_spawn_touch_controls()
 
-
-## 生成果子生成器
-func _spawn_food_spawner() -> void:
-	food_spawner = FoodSpawnerScene.instantiate() as FoodSpawner
-	add_child(food_spawner)
+	hud.show_hint("管理好饥饿/口渴/体力。靠近湖泊按 E 或饮水键喝水，吃对的食物会成长。")
 
 
-## 生成玩家恐龙
-func _spawn_player() -> void:
-	player = PlayerScene.instantiate()
-	add_child(player)
-	player.global_position = Vector3(0.0, PLAYER_SPAWN_Y, 0.0)
+# ================= 生成 =================
+func _spawn_water() -> void:
+	var w: WaterSource = WaterScene.instantiate() as WaterSource
+	w.global_position = LAKE_POS
+	w.radius = LAKE_RADIUS
+	dynamic.add_child(w)
+
+
+func _spawn_foliage() -> void:
+	var fs: FoliageSpawner = FoliageSpawnerScene.instantiate() as FoliageSpawner
+	dynamic.add_child(fs)
+
+
+func _spawn_decor() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	for i in 20:
+		var pos: Vector3 = _random_ground_pos()
+		if pos.distance_to(PLAYER_SPAWN) < 10.0 or pos.distance_to(LAKE_POS) < LAKE_RADIUS + 3.0:
+			continue
+		dynamic.add_child(_make_tree(pos))
+	for i in 12:
+		var pos: Vector3 = _random_ground_pos()
+		if pos.distance_to(PLAYER_SPAWN) < 8.0:
+			continue
+		dynamic.add_child(_make_rock(pos))
+
+
+func _make_tree(pos: Vector3) -> Node3D:
+	var n := Node3D.new()
+	n.position = pos
+	var trunk := CSGCylinder3D.new()
+	trunk.radius = 0.4
+	trunk.height = 3.0
+	trunk.position = Vector3(0, 1.5, 0)
+	trunk.use_collision = true
+	trunk.material = mat_trunk
+	n.add_child(trunk)
+	var top := CSGSphere3D.new()
+	top.radius = 1.4
+	top.position = Vector3(0, 3.5, 0)
+	top.use_collision = true
+	top.material = mat_foliage
+	n.add_child(top)
+	return n
+
+
+func _make_rock(pos: Vector3) -> Node3D:
+	var n := Node3D.new()
+	n.position = pos
+	var r := CSGBox3D.new()
+	var s: float = randf_range(1.0, 1.8)
+	r.size = Vector3(s, s * 0.7, s * 1.1)
+	r.position = Vector3(0, 0.5, 0)
+	r.use_collision = true
+	r.material = mat_rock
+	n.add_child(r)
+	return n
+
+
+func _spawn_player(species_id: String, stage: int, gen: int) -> void:
+	player = PlayerScene.instantiate() as PlayerDino
+	player.species_id = species_id
+	player.start_growth_stage = stage
+	player.generation = gen
+	# 先连信号，再加树（_ready 内会发出初始信号）
 	player.health_changed.connect(_on_player_health_changed)
 	player.hunger_changed.connect(_on_player_hunger_changed)
+	player.thirst_changed.connect(_on_player_thirst_changed)
+	player.stamina_changed.connect(_on_player_stamina_changed)
+	player.growth_changed.connect(_on_player_growth_changed)
+	player.banner.connect(_on_player_banner)
+	player.hint.connect(_on_player_hint)
 	player.died.connect(_on_player_died)
-	player.bite_hit.connect(_on_player_bite_hit)
-	player.evolved.connect(_on_player_evolved)
-	player.food_eaten.connect(_on_player_food_eaten)
+	dynamic.add_child(player)
+	player.global_position = PLAYER_SPAWN
 
 
-## 生成 AI 恐龙群：2 肉食 + 3 食草
-func _spawn_ai() -> void:
-	var total: int = CARNIVORE_COUNT + HERBIVORE_COUNT
-	for i in total:
-		var ai: AIDino = AIScene.instantiate() as AIDino
-		# 在 add_child 之前设置 diet，_ready 才能正确应用外观
-		if i < CARNIVORE_COUNT:
-			ai.diet = AIDino.Diet.CARNIVORE
-			ai.max_health = 8
-			ai.attack_damage = 3
-		else:
-			ai.diet = AIDino.Diet.HERBIVORE
-			ai.max_health = 5
-			ai.attack_damage = 0
-		add_child(ai)
-		# 在玩家周围环形分布
-		var angle: float = (float(i) / float(total)) * TAU + randf() * 0.3
-		var pos: Vector3 = Vector3(
-			sin(angle) * AI_SPAWN_RADIUS,
-			PLAYER_SPAWN_Y,
-			cos(angle) * AI_SPAWN_RADIUS
-		)
-		ai.global_position = pos
-		ai.set_player(player)
-		ai.set_food_spawner(food_spawner)
-		ai.died.connect(_on_ai_died)
-		ai_dinos.append(ai)
+func _spawn_ecosystem(player_stage: int) -> void:
+	var roster := _build_roster(player_stage)
+	for sid in roster:
+		_spawn_ai(sid, _random_ai_stage(player_stage))
 
 
-## 生成 HUD
+func _build_roster(player_stage: int) -> Array[String]:
+	var roster: Array[String] = ["galli", "galli", "trike", "anky", "raptor", "raptor", "raptor", "carno"]
+	if player_stage >= 1:
+		roster.append("carno")
+	if player_stage >= 2:
+		roster.append("trex")
+	if player_stage >= 3:
+		roster.append("trex")
+	return roster
+
+
+func _random_ai_stage(player_stage: int) -> int:
+	var r: float = randf()
+	if r < 0.5:
+		return 0
+	elif r < 0.8:
+		return 1
+	elif r < 0.95:
+		return 2
+	return mini(3, player_stage + 1)
+
+
+func _spawn_ai(species_id: String, stage: int) -> void:
+	var ai: AIDino = AIScene.instantiate() as AIDino
+	ai.species_id = species_id
+	ai.start_growth_stage = stage
+	ai.map_radius = MAP_RADIUS
+	var pos: Vector3 = _random_ground_pos()
+	# 不要紧贴玩家出生点
+	if pos.distance_to(PLAYER_SPAWN) < 14.0:
+		pos = pos.normalized() * 30.0 if pos.length() > 0.1 else Vector3(30, 0, 0)
+	dynamic.add_child(ai)
+	ai.global_position = Vector3(pos.x, 1.5, pos.z)
+	ai.died.connect(_on_ai_died)
+	ai_dinos.append(ai)
+
+
+# ================= HUD / 触屏 =================
 func _spawn_hud() -> void:
-	hud = HUDScene.instantiate()
-	add_child(hud)
-	hud.set_player_health(player.current_health, player.max_health)
-	hud.set_player_hunger(player.current_hunger, player.max_hunger)
-	hud.set_evolution(player.get_evolution_display_level(), player.get_evolution_name())
-	hud.set_food_progress(0, PlayerDino.FOOD_PER_EVOLUTION)
-	hud.set_kill_count(0)
-	hud.show_hint("咬死恐龙吃尸体回饥饿，吃果子也能少量回饥饿")
+	hud = HUDScene.instantiate() as HUD
+	dynamic.add_child(hud)
+	hud.menu_pressed.connect(_on_menu)
 
 
-## 生成触屏控制
 func _spawn_touch_controls() -> void:
-	touch_controls = TouchControlsScene.instantiate()
-	add_child(touch_controls)
+	touch_controls = TouchControlsScene.instantiate() as TouchControls
+	dynamic.add_child(touch_controls)
 	touch_controls.move_input_changed.connect(player.set_move_input)
 	touch_controls.bite_pressed.connect(player.try_bite)
 	touch_controls.jump_pressed.connect(player.try_jump)
-
-	# 果子被吃信号连接
-	food_spawner.berry_eaten_by_player.connect(_on_berry_eaten_by_player)
-	food_spawner.berry_eaten_by_ai.connect(_on_berry_eaten_by_ai)
+	touch_controls.ability_pressed.connect(player.try_ability)
+	touch_controls.drink_pressed.connect(player.set_drink_held)
 
 
-func _process(delta: float) -> void:
-	if is_game_over:
-		restart_timer -= delta
-		if restart_timer <= 0.0:
-			get_tree().reload_current_scene()
-		return
-	# 检查胜利：所有 AI 死亡（不考虑尸体是否吃完）
-	if ai_dinos.is_empty() and not is_game_over:
-		_trigger_end(true)
+# ================= 信号 =================
+func _on_player_health_changed(c: int, m: int) -> void:
+	hud.set_health(c, m)
 
+func _on_player_hunger_changed(c: int, m: int) -> void:
+	hud.set_hunger(c, m)
 
-## 触发游戏结束
-func _trigger_end(victory: bool) -> void:
-	if is_game_over:
-		return
-	is_game_over = true
-	restart_timer = RESTART_DELAY
-	if victory:
-		hud.show_victory()
+func _on_player_thirst_changed(c: int, m: int) -> void:
+	hud.set_thirst(c, m)
+
+func _on_player_stamina_changed(c: int, m: int) -> void:
+	hud.set_stamina(c, m)
+
+func _on_player_growth_changed(stage: int, name: String, progress: float) -> void:
+	hud.set_growth(stage, name, progress)
+	if player != null:
+		hud.set_species(player.species.name, player.species.diet_text(), name)
+
+func _on_player_banner(text: String) -> void:
+	hud.show_banner(text)
+
+func _on_player_hint(text: String) -> void:
+	if text == "":
+		hud.hide_hint()
 	else:
-		hud.show_game_over()
-
-
-func _on_player_health_changed(current: int, maximum: int) -> void:
-	hud.set_player_health(current, maximum)
-
-
-func _on_player_hunger_changed(current: int, maximum: int) -> void:
-	hud.set_player_hunger(current, maximum)
-
+		hud.show_hint(text)
 
 func _on_player_died() -> void:
-	_trigger_end(false)
+	if is_over:
+		return
+	is_over = true
+	# 存档：保留成长，代际 +1，记录最佳成绩
+	var d: Dictionary = SaveManager.load_save()
+	d["species_id"] = player.species.id
+	d["growth_stage"] = player.growth_stage
+	d["generation"] = player.generation + 1
+	d["best_time"] = maxi(d.get("best_time", 0), int(survival_time))
+	d["best_kills"] = maxi(d.get("best_kills", 0), kill_count)
+	SaveManager.write_save(d)
+	var best: String = "最佳存活 %d 秒 / 最多击杀 %d" % [d.get("best_time", 0), d.get("best_kills", 0)]
+	hud.show_death("你被猎杀了！\n第 %d 代 · 存活 %d 秒 · 击杀 %d\n成长已保留，下一局继续变强\n%s" % [player.generation, int(survival_time), kill_count, best])
+	await get_tree().create_timer(3.5).timeout
+	skip_select = true
+	get_tree().reload_current_scene()
 
 
-## 玩家咬击命中：AI 恐龙造成伤害 / 尸体则吃尸体
-func _on_player_bite_hit(target: Node3D) -> void:
-	if target is AIDino:
-		(target as AIDino).take_damage(player.bite_damage)
-	elif target is AICorpse:
-		var corpse: AICorpse = target as AICorpse
-		if corpse.try_eat():
-			player.eat_food(CORPSE_HUNGER_AMOUNT, CORPSE_HEAL_AMOUNT)
-
-
-## AI 死亡：累计击杀、生成尸体、从列表移除
-func _on_ai_died(ai: AIDino) -> void:
+func _on_ai_died(ai: AIDino, by_player: bool) -> void:
 	ai_dinos.erase(ai)
-	kill_count += 1
-	hud.set_kill_count(kill_count)
-	# 在原位生成尸体
+	# 生成尸体（按死亡物种上色）
 	var corpse: AICorpse = CorpseScene.instantiate() as AICorpse
-	add_child(corpse)
+	corpse.species_id = ai.species.id
+	corpse.species_colors = [ai.species.body_color, ai.species.dark_color]
+	dynamic.add_child(corpse)
 	corpse.global_position = ai.global_position
+	if by_player:
+		kill_count += 1
 
 
-## 玩家吃到果子：回 5 饥饿（0 血量）
-func _on_berry_eaten_by_player(p: PlayerDino) -> void:
-	p.eat_food(BERRY_HUNGER_AMOUNT, 0)
+func _on_menu() -> void:
+	skip_select = false
+	get_tree().reload_current_scene()
 
 
-## 食草 AI 吃到果子：回血（不影响玩家）
-func _on_berry_eaten_by_ai(ai: AIDino) -> void:
-	ai.on_ate_berry()
+# ================= 主循环 =================
+func _process(delta: float) -> void:
+	if is_over:
+		return
+	survival_time += delta
+	# 生态维护：数量不足时在边缘补充
+	pop_timer += delta
+	if pop_timer >= RESPAWN_CHECK:
+		pop_timer = 0.0
+		if ai_dinos.size() < TARGET_POP:
+			var sid: String = "galli" if randf() < 0.5 else "raptor"
+			_spawn_ai(sid, _random_ai_stage(player.growth_stage if player != null else 0))
+	# 计分刷新
+	score_timer += delta
+	if score_timer >= 0.5:
+		score_timer = 0.0
+		var gen: int = player.generation if player != null else 1
+		hud.set_score(int(survival_time), kill_count, gen)
 
 
-## 玩家进化：更新 HUD 等级显示 + 显示横幅
-func _on_player_evolved(level: int, level_name: String) -> void:
-	hud.set_evolution(level + 1, level_name)
-	hud.show_evolution(level_name)
-
-
-## 玩家食物计数变化：更新 HUD 进度条
-func _on_player_food_eaten(count: int, required: int) -> void:
-	hud.set_food_progress(count, required)
+# ================= 工具 =================
+func _random_ground_pos() -> Vector3:
+	var angle: float = randf() * TAU
+	var dist: float = randf() * (MAP_RADIUS - 6.0)
+	return Vector3(sin(angle) * dist, 0.0, cos(angle) * dist)

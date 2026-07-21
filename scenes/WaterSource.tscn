@@ -1,0 +1,17 @@
+[gd_scene load_steps=3 format=3 uid="uid://watersource001"]
+
+[ext_resource type="Script" path="res://scripts/world/WaterSource.gd" id="1_water"]
+
+[sub_resource type="StandardMaterial3D" id="mat_water"]
+albedo_color = Color(0.15, 0.4, 0.7, 1)
+roughness = 0.2
+metallic = 0.0
+transparency = 1
+
+[node name="WaterSource" type="Node3D"]
+script = ExtResource("1_water")
+
+[node name="Water" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.12, 0)
+size = Vector3(36, 0.25, 36)
+material = SubResource("mat_water")

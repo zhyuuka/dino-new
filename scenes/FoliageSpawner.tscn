@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://foliagespawner01"]
+
+[ext_resource type="Script" path="res://scripts/world/FoliageSpawner.gd" id="1_fspawn"]
+
+[node name="FoliageSpawner" type="Node3D"]
+script = ExtResource("1_fspawn")

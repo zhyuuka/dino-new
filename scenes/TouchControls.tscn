@@ -1,52 +1,76 @@
-[gd_scene load_steps=4 format=3 uid="uid://btouchcontro01x"]
+[gd_scene load_steps=3 format=3 uid="uid://btouchcontrols001"]
 
 [ext_resource type="Script" path="res://scripts/ui/TouchControls.gd" id="1_touch"]
-[ext_resource type="Script" path="res://scripts/ui/VirtualJoystick.gd" id="2_joystick"]
+[ext_resource type="Script" path="res://scripts/ui/VirtualJoystick.gd" id="2_joy"]
 
 [node name="TouchControls" type="CanvasLayer"]
 script = ExtResource("1_touch")
 
 [node name="Control" type="Control" parent="."]
-layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 mouse_filter = 2
 
 [node name="Joystick" type="Control" parent="Control"]
-layout_mode = 1
+anchors_preset = 3
 anchor_left = 0.0
 anchor_top = 1.0
 anchor_right = 0.0
 anchor_bottom = 1.0
 offset_left = 30.0
-offset_top = -230.0
-offset_right = 230.0
+offset_top = -210.0
+offset_right = 210.0
 offset_bottom = -30.0
-script = ExtResource("2_joystick")
-max_radius = 80.0
-dead_zone = 0.15
+script = ExtResource("2_joy")
+mouse_filter = 0
 
 [node name="BiteButton" type="Button" parent="Control"]
-layout_mode = 1
+anchors_preset = 3
 anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -170.0
-offset_top = -90.0
+offset_left = -150.0
+offset_top = -110.0
 offset_right = -30.0
-offset_bottom = -30.0
-text = "咬击"
+offset_bottom = -40.0
+text = "咬"
 
 [node name="JumpButton" type="Button" parent="Control"]
-layout_mode = 1
+anchors_preset = 3
 anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -170.0
-offset_top = -170.0
+offset_left = -140.0
+offset_top = -200.0
 offset_right = -30.0
-offset_bottom = -110.0
-text = "跳跃"
+offset_bottom = -130.0
+text = "跳"
+
+[node name="AbilityButton" type="Button" parent="Control"]
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -280.0
+offset_top = -200.0
+offset_right = -170.0
+offset_bottom = -130.0
+text = "技能"
+
+[node name="DrinkButton" type="Button" parent="Control"]
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -280.0
+offset_top = -110.0
+offset_right = -170.0
+offset_bottom = -40.0
+text = "喝水"
