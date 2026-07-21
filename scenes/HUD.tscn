@@ -220,3 +220,44 @@ offset_top = 112.0
 offset_right = -12.0
 offset_bottom = 252.0
 script = ExtResource("2_minimap")
+
+[node name="HelpPanel" type="Control" parent="Control"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Backdrop" type="ColorRect" parent="Control/HelpPanel"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.72)
+mouse_filter = 2
+
+[node name="HelpLabel" type="RichTextLabel" parent="Control/HelpPanel"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = -280.0
+offset_right = 300.0
+offset_bottom = 30.0
+bbcode_enabled = true
+text = "[center][b][font_size=26]恐龙生存 · 上手指南[/font_size][/b][/center]\n\n[font_size=20]● [b]左摇杆[/b]：移动\n● [b]右半屏拖动[/b]：转动视角\n● [b]咬[/b]：攻击 / 进食\n● [b]跳[/b]：跳跃\n● [b]技能[/b]：冲锋（仅部分恐龙）\n● [b]喝水[/b]：靠近水源长按\n\n[b]目标[/b]：捕食、进食成长，躲开更大的肉食恐龙。\n[b]小地图[/b]：蓝=水源  黄=资源  红=肉食  绿=草食[/font_size]"
+
+[node name="HelpButton" type="Button" parent="Control/HelpPanel"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -120.0
+offset_top = 60.0
+offset_right = 120.0
+offset_bottom = 115.0
+text = "开始狩猎"

@@ -42,3 +42,20 @@ func _ui() -> void:
 
 func _on_joystick_input(vec: Vector2) -> void:
 	move_input_changed.emit(vec)
+
+
+## 仅拥有冲锋技能的物种显示技能按钮
+func set_ability_visible(v: bool) -> void:
+	ability_button.visible = v
+
+
+## 显示冲锋冷却：冷却中显示剩余秒数并半透明，就绪恢复「技能」
+func set_ability_cooldown(remaining: float, total: float) -> void:
+	if not ability_button.visible:
+		return
+	if remaining > 0.05:
+		ability_button.text = "%.1f" % remaining
+		ability_button.modulate.a = 0.55
+	else:
+		ability_button.text = "技能"
+		ability_button.modulate.a = 1.0

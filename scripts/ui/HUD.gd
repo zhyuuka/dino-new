@@ -22,6 +22,9 @@ signal menu_pressed
 @onready var death_panel: ColorRect = $Control/DeathPanel
 @onready var death_label: Label = $Control/DeathPanel/DeathLabel
 @onready var menu_button: Button = $Control/MenuButton
+@onready var help_panel: Control = $Control/HelpPanel
+@onready var help_label: RichTextLabel = $Control/HelpPanel/HelpLabel
+@onready var help_button: Button = $Control/HelpPanel/HelpButton
 
 var _hint_tween: Tween = null
 var _last_hint: String = ""
@@ -39,6 +42,8 @@ func _ready() -> void:
 	death_panel.visible = false
 	death_label.visible = false
 	menu_button.pressed.connect(func(): menu_pressed.emit())
+	help_panel.visible = false
+	help_button.pressed.connect(func(): hide_help())
 
 
 ## 用主题样式覆盖进度条填充色（Godot 4 的正确上色方式）
@@ -119,3 +124,12 @@ func show_death(text: String) -> void:
 	death_panel.visible = true
 	death_label.visible = true
 	death_label.modulate.a = 1.0
+
+
+## 首次游玩引导：图文图例，点「开始狩猎」关闭
+func show_help() -> void:
+	help_panel.visible = true
+
+
+func hide_help() -> void:
+	help_panel.visible = false

@@ -428,6 +428,11 @@ func restore_stamina(amt: int) -> void:
 
 
 # ================= 技能 =================
+## 是否拥有「冲锋」主动技能（决定技能按钮是否显示）
+func has_charge_ability() -> bool:
+	return species.active == DinoSpecies.ActiveAbility.CHARGE
+
+
 func try_ability() -> void:
 	if is_dead or species.active != DinoSpecies.ActiveAbility.CHARGE:
 		return

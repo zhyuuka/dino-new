@@ -137,6 +137,7 @@ func _start_game(species_id: String, is_continue: bool) -> void:
 	_spawn_touch_controls()
 
 	hud.show_hint("管理好饥饿/口渴/体力。靠近湖泊按 E 或饮水键喝水，吃对的食物会成长。")
+	hud.show_help()
 
 
 # ================= 生成 =================
@@ -333,6 +334,8 @@ func _spawn_touch_controls() -> void:
 	touch_controls.ability_pressed.connect(player.try_ability)
 	touch_controls.drink_pressed.connect(player.set_drink_held)
 	touch_controls.look_input_changed.connect(player.add_look_delta)
+	if player != null and is_instance_valid(player):
+		touch_controls.set_ability_visible(player.has_charge_ability())
 
 
 # ================= 信号 =================
@@ -427,6 +430,9 @@ func _process(delta: float) -> void:
 		score_timer = 0.0
 		var gen: int = player.generation if player != null else 1
 		hud.set_score(int(survival_time), kill_count, gen)
+	# 技能冷却显示（仅冲锋物种）
+	if player != null and is_instance_valid(player) and player.has_charge_ability():
+		touch_controls.set_ability_cooldown(player.charge_cooldown_timer, PlayerDino.CHARGE_COOLDOWN)
 
 
 # ================= 工具 =================
