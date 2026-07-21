@@ -15,6 +15,9 @@ const HUDScene: PackedScene = preload("res://scenes/HUD.tscn")
 const TouchControlsScene: PackedScene = preload("res://scenes/TouchControls.tscn")
 const SpeciesSelectScene: PackedScene = preload("res://scenes/SpeciesSelect.tscn")
 
+# 环境音（程序化合成风声，循环）
+const SFX_AMBIENT := preload("res://assets/audio/ambient.wav")
+
 # 首次启动是否跳过选种界面（交付时必须为 false，让玩家先选物种）
 static var skip_select: bool = false
 
@@ -63,6 +66,13 @@ func _ready() -> void:
 	mat_rock = StandardMaterial3D.new()
 	mat_rock.albedo_color = Color(0.5, 0.5, 0.52)
 	mat_rock.roughness = 0.95
+
+	# 环境风声（循环）
+	var amb := AudioStreamPlayer.new()
+	amb.stream = SFX_AMBIENT
+	amb.volume_db = -14.0
+	add_child(amb)
+	amb.play()
 
 	if not skip_select:
 		_show_species_select()

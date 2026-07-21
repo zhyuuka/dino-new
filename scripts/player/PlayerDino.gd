@@ -94,6 +94,7 @@ var touch_move_input: Vector2 = Vector2.ZERO
 var _look_delta: Vector2 = Vector2.ZERO
 var touch_drink: bool = false
 var _f_held: bool = false
+var _was_drinking: bool = false
 
 # 技能
 var charge_cooldown_timer: float = 0.0
@@ -123,6 +124,15 @@ var visual_base_scale: Vector3 = Vector3.ONE
 @onready var spring_arm: SpringArm3D = $SpringArm3D
 @onready var camera: Camera3D = $SpringArm3D/Camera3D
 
+# 音效（程序化合成 WAV）
+const SFX_BITE := preload("res://assets/audio/bite.wav")
+const SFX_HURT := preload("res://assets/audio/hurt.wav")
+const SFX_EAT := preload("res://assets/audio/eat.wav")
+const SFX_DRINK := preload("res://assets/audio/drink.wav")
+const SFX_EVOLVE := preload("res://assets/audio/evolve.wav")
+const SFX_DEATH := preload("res://assets/audio/death.wav")
+var sfx: AudioStreamPlayer
+
 const CAM_YAW_SPEED: float = 2.2
 const CAM_PITCH: float = -0.35
 const CAM_PITCH_MIN: float = -1.15
@@ -136,6 +146,9 @@ const JUMP_VELOCITY: float = 7.5
 
 func _ready() -> void:
 	add_to_group("player")
+	sfx = AudioStreamPlayer.new()
+	sfx.volume_db = -4.0
+	add_child(sfx)
 	species = DinoSpecies.by_id(species_id)
 	if species == null:
 		species = DinoSpecies.by_id("raptor")
@@ -256,8 +269,12 @@ func _physics_process(delta: float) -> void:
 		thirst_changed.emit(current_thirst, THIRST_MAX)
 		speed *= DRINK_SLOW
 		_update_drink_hint(true)
+		if not _was_drinking:
+			_sfx(SFX_DRINK)
+			_was_drinking = true
 	else:
 		_update_drink_hint(false)
+		_was_drinking = false
 
 	var target_vel: Vector3 = move_dir * speed * buff_speed_mult
 	var accel: float = ACCEL * delta
@@ -365,6 +382,7 @@ func try_bite() -> void:
 	is_biting = true
 	bite_anim_timer = 0.3
 	dino_visual.play_attack()
+	_sfx(SFX_BITE)
 	# 命中检测：附近前方的 AI 或 尸体
 	var fwd: Vector3 = -global_transform.basis.z
 	fwd.y = 0.0
@@ -447,6 +465,7 @@ func _eat_meal(kind: String) -> void:
 	if kind == "meat":
 		if species.diet != DinoSpecies.Diet.CARNIVORE:
 			return
+		_sfx(SFX_EAT)
 		current_hunger = mini(current_hunger + MEAT_HUNGER, HUNGER_MAX)
 		hunger_changed.emit(current_hunger, HUNGER_MAX)
 		heal(MEAT_HEAL)
@@ -454,6 +473,7 @@ func _eat_meal(kind: String) -> void:
 	elif kind == "plant":
 		if species.diet != DinoSpecies.Diet.HERBIVORE:
 			return
+		_sfx(SFX_EAT)
 		current_hunger = mini(current_hunger + PLANT_HUNGER, HUNGER_MAX)
 		current_thirst = mini(current_thirst + PLANT_THIRST, THIRST_MAX)
 		hunger_changed.emit(current_hunger, HUNGER_MAX)
@@ -477,6 +497,7 @@ func _add_growth_meal() -> void:
 		current_health = max_health
 		health_changed.emit(current_health, max_health)
 		banner.emit("成长为 %s！" % DinoSpecies.stage_name(growth_stage))
+		_sfx(SFX_EVOLVE)
 		_play_glow()
 		_save_progress()
 	_growth_signal()
@@ -492,6 +513,7 @@ func take_damage(amount: int) -> void:
 	current_health = maxi(0, current_health - dmg)
 	health_changed.emit(current_health, max_health)
 	dino_visual.pulse_damage()
+	_sfx(SFX_HURT)
 	if current_health <= 0:
 		_die()
 
@@ -508,6 +530,7 @@ func _die() -> void:
 	remove_from_group("player")
 	died.emit()
 	dino_visual.shrink_death()
+	_sfx(SFX_DEATH)
 	var tween: Tween = create_tween()
 	tween.tween_property(self, "global_position:y", global_position.y - 0.4, 0.5)
 
@@ -537,6 +560,14 @@ func _clamp_to_map() -> void:
 		global_position.z = inward.z * map_radius
 		velocity.x = 0.0
 		velocity.z = 0.0
+
+
+## 播放音效（sfx 节点在 _ready 创建，独立于 is_dead）
+func _sfx(s: AudioStream) -> void:
+	if sfx == null or not is_instance_valid(sfx) or s == null:
+		return
+	sfx.stream = s
+	sfx.play()
 
 
 func _update_drink_hint(in_water: bool) -> void:
