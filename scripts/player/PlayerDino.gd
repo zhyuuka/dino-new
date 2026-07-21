@@ -24,6 +24,7 @@ signal hint(text: String)             # 上下文小提示（饮水等）
 var species_id: String = "raptor"
 var start_growth_stage: int = 0
 var generation: int = 1
+var map_radius: float = 140.0
 
 # ---------- 生存数值（上限与衰减，标 [PLACEHOLDER] 待手感调） ----------
 const HUNGER_MAX: int = 100
@@ -283,6 +284,7 @@ func _physics_process(delta: float) -> void:
 	var moving := move_dir.length() > 0.1 and not drinking
 	dino_visual.play_locomotion(moving, speed / maxf(walk_speed, 0.001))
 	move_and_slide()
+	_clamp_to_map()
 
 
 # ================= 体力 =================
@@ -501,6 +503,16 @@ func _is_in_water() -> bool:
 			if d <= ws.radius:
 				return true
 	return false
+
+func _clamp_to_map() -> void:
+	var d: float = Vector2(global_position.x, global_position.z).length()
+	if d > map_radius:
+		var inward: Vector3 = Vector3(-global_position.x, 0.0, -global_position.z).normalized()
+		global_position.x = inward.x * map_radius
+		global_position.z = inward.z * map_radius
+		velocity.x = 0.0
+		velocity.z = 0.0
+
 
 func _update_drink_hint(in_water: bool) -> void:
 	var h := ""

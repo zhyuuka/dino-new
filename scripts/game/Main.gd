@@ -17,11 +17,16 @@ const SpeciesSelectScene: PackedScene = preload("res://scenes/SpeciesSelect.tscn
 # 首次启动是否跳过选种界面（交付时必须为 false，让玩家先选物种）
 static var skip_select: bool = false
 
-const MAP_RADIUS: float = 78.0
-const LAKE_POS: Vector3 = Vector3(-40.0, 0.0, 40.0)
+const MAP_RADIUS: float = 135.0
+# 多个水源：主湖 + 两处池塘，分散在大地图上
+const WATER_POINTS: Array = [
+	Vector3(-45.0, 0.0, 45.0),   # 主湖
+	Vector3(70.0, 0.0, -55.0),   # 东池塘
+	Vector3(-80.0, 0.0, -70.0),  # 西南池塘
+]
 const LAKE_RADIUS: float = 18.0
 const PLAYER_SPAWN: Vector3 = Vector3(0.0, 1.5, 0.0)
-const TARGET_POP: int = 10
+const TARGET_POP: int = 12
 const RESPAWN_CHECK: float = 12.0
 
 var player: PlayerDino
@@ -114,10 +119,12 @@ func _start_game(species_id: String, is_continue: bool) -> void:
 
 # ================= 生成 =================
 func _spawn_water() -> void:
-	var w: WaterSource = WaterScene.instantiate() as WaterSource
-	w.global_position = LAKE_POS
-	w.radius = LAKE_RADIUS
-	dynamic.add_child(w)
+	var radii := [LAKE_RADIUS, 12.0, 10.0]
+	for i in WATER_POINTS.size():
+		var w: WaterSource = WaterScene.instantiate() as WaterSource
+		w.global_position = WATER_POINTS[i]
+		w.radius = radii[i] if i < radii.size() else 10.0
+		dynamic.add_child(w)
 
 
 func _spawn_foliage() -> void:
@@ -128,16 +135,37 @@ func _spawn_foliage() -> void:
 func _spawn_decor() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
-	for i in 20:
+	for i in 34:
 		var pos: Vector3 = _random_ground_pos()
-		if pos.distance_to(PLAYER_SPAWN) < 10.0 or pos.distance_to(LAKE_POS) < LAKE_RADIUS + 3.0:
+		if _too_close_to_water(pos, 4.0) or pos.distance_to(PLAYER_SPAWN) < 12.0:
 			continue
 		dynamic.add_child(_make_tree(pos))
-	for i in 12:
+	for i in 22:
 		var pos: Vector3 = _random_ground_pos()
-		if pos.distance_to(PLAYER_SPAWN) < 8.0:
+		if _too_close_to_water(pos, 4.0) or pos.distance_to(PLAYER_SPAWN) < 10.0:
 			continue
 		dynamic.add_child(_make_rock(pos))
+	# 树林集群：3 处聚拢的树群，丰富地貌
+	for c in 3:
+		var center: Vector3 = _random_ground_pos()
+		if _too_close_to_water(center, 8.0):
+			continue
+		for k in range(rng.randi_range(5, 8)):
+			var off := Vector3(rng.randf_range(-9, 9), 0, rng.randf_range(-9, 9))
+			var p: Vector3 = center + off
+			if _too_close_to_water(p, 4.0):
+				continue
+			dynamic.add_child(_make_tree(p))
+
+
+## 是否过于靠近任一水源（避免装饰/植物长在水里）
+func _too_close_to_water(pos: Vector3, margin: float) -> bool:
+	var radii := [LAKE_RADIUS, 12.0, 10.0]
+	for i in WATER_POINTS.size():
+		var r: float = radii[i] if i < radii.size() else 10.0
+		if pos.distance_to(WATER_POINTS[i]) < r + margin:
+			return true
+	return false
 
 
 func _make_tree(pos: Vector3) -> Node3D:
@@ -177,6 +205,7 @@ func _spawn_player(species_id: String, stage: int, gen: int) -> void:
 	player.species_id = species_id
 	player.start_growth_stage = stage
 	player.generation = gen
+	player.map_radius = MAP_RADIUS
 	# 先连信号，再加树（_ready 内会发出初始信号）
 	player.health_changed.connect(_on_player_health_changed)
 	player.hunger_changed.connect(_on_player_hunger_changed)

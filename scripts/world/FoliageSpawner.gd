@@ -5,8 +5,8 @@ extends Node3D
 
 const FoliageScene: PackedScene = preload("res://scenes/Foliage.tscn")
 
-const FOLIAGE_COUNT: int = 22
-const SPAWN_RADIUS: float = 70.0
+const FOLIAGE_COUNT: int = 30
+const SPAWN_RADIUS: float = 130.0
 const RESPAWN_INTERVAL: float = 12.0
 
 var foliage: Array[Foliage] = []

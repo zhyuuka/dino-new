@@ -31,22 +31,22 @@ albedo_color = Color(0.62, 0.55, 0.32, 1)
 roughness = 0.95
 
 [sub_resource type="BoxShape3D" id="shape_wall_n"]
-size = Vector3(160, 4, 1)
+size = Vector3(280, 4, 1)
 
 [sub_resource type="BoxShape3D" id="shape_wall_s"]
-size = Vector3(160, 4, 1)
+size = Vector3(280, 4, 1)
 
 [sub_resource type="BoxShape3D" id="shape_wall_e"]
-size = Vector3(1, 4, 160)
+size = Vector3(1, 4, 280)
 
 [sub_resource type="BoxShape3D" id="shape_wall_w"]
-size = Vector3(1, 4, 160)
+size = Vector3(1, 4, 280)
 
 [sub_resource type="BoxShape3D" id="shape_floor"]
-size = Vector3(160, 1, 160)
+size = Vector3(280, 1, 280)
 
 [sub_resource type="BoxShape3D" id="shape_dry"]
-size = Vector3(70, 0.2, 70)
+size = Vector3(110, 0.2, 110)
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1_main")
@@ -61,19 +61,19 @@ environment = SubResource("env")
 
 [node name="Floor" type="CSGBox3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
-size = Vector3(160, 1, 160)
+size = Vector3(280, 1, 280)
 use_collision = true
 material = SubResource("mat_floor")
 
 [node name="DryPatch" type="CSGBox3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 35, 0.05, -35)
-size = Vector3(70, 0.2, 70)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 55, 0.05, -55)
+size = Vector3(110, 0.2, 110)
 material = SubResource("mat_dry")
 
 [node name="BoundaryWalls" type="Node3D" parent="."]
 
 [node name="WallNorth" type="StaticBody3D" parent="BoundaryWalls"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, -80)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, -140)
 collision_layer = 1
 collision_mask = 0
 
@@ -81,7 +81,7 @@ collision_mask = 0
 shape = SubResource("shape_wall_n")
 
 [node name="WallSouth" type="StaticBody3D" parent="BoundaryWalls"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 80)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 140)
 collision_layer = 1
 collision_mask = 0
 
@@ -89,7 +89,7 @@ collision_mask = 0
 shape = SubResource("shape_wall_s")
 
 [node name="WallEast" type="StaticBody3D" parent="BoundaryWalls"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 80, 2, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 140, 2, 0)
 collision_layer = 1
 collision_mask = 0
 
@@ -97,7 +97,7 @@ collision_mask = 0
 shape = SubResource("shape_wall_e")
 
 [node name="WallWest" type="StaticBody3D" parent="BoundaryWalls"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -80, 2, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -140, 2, 0)
 collision_layer = 1
 collision_mask = 0
 
