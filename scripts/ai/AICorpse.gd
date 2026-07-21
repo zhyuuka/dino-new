@@ -6,8 +6,8 @@ extends StaticBody3D
 ## - 躺在地上、按死亡物种上色后变暗
 ## 物理层 layer 3 (AI)，被玩家 / AI 的咬击与寻食检测（group "corpse"）
 
-const LIFETIME: float = 20.0
-const MAX_BITES: int = 3
+const LIFETIME: float = 35.0
+const MAX_BITES: int = 4
 const FADE_DURATION: float = 0.4
 
 # 由 Main 在生成时按死亡物种设置

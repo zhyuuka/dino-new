@@ -28,12 +28,12 @@ var map_radius: float = 140.0
 
 # ---------- 生存数值（上限与衰减，标 [PLACEHOLDER] 待手感调） ----------
 const HUNGER_MAX: int = 100
-const HUNGER_INTERVAL: float = 35.0      # 每 35s 掉 1 点饥饿
+const HUNGER_INTERVAL: float = 14.0      # 每 14s 掉 1 点饥饿（满→空约 23 分钟）
 const STARVE_INTERVAL: float = 5.0       # 饥饿为 0 时每 5s
 const STARVE_DAMAGE: int = 6             # 饿死掉血
 
 const THIRST_MAX: int = 100
-const THIRST_INTERVAL: float = 30.0      # 每 30s 掉 1 点口渴
+const THIRST_INTERVAL: float = 12.0      # 每 12s 掉 1 点口渴（冲刺时倍率减半）
 const THIRST_SPRINT_MULT: float = 0.5    # 冲刺时口渴消耗翻倍（间隔减半）
 const THIRST_STARVE_INTERVAL: float = 4.0
 const THIRST_STARVE_DAMAGE: int = 5      # 渴死掉血
