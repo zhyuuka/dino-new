@@ -17,6 +17,7 @@ var map_radius: float = 80.0
 
 const SENSE_RADIUS: float = 24.0
 const FLEE_RADIUS: float = 18.0
+const APEX_RADIUS: float = 24.0
 const ATTACK_RANGE: float = 2.8
 const GRAZE_RANGE: float = 2.2
 
@@ -322,6 +323,11 @@ func _player() -> PlayerDino:
 	return arr[0] as PlayerDino
 
 func _find_threat() -> Node3D:
+	# APEX 威压：非 APEX 恐龙会被附近的霸王龙(APEX)吓退，无视体型大小
+	if species.passive != DinoSpecies.PassiveAbility.APEX:
+		var apex: Node3D = _find_apex_threat()
+		if apex != null:
+			return apex
 	var best: Node3D = null
 	var best_d: float = FLEE_RADIUS
 	for n in get_tree().get_nodes_in_group("ai"):
@@ -338,6 +344,28 @@ func _find_threat() -> Node3D:
 			best = other
 	var p: PlayerDino = _player()
 	if p != null and not p.is_dead and p.is_carnivore() and p.get_size() > current_size * 0.85:
+		var d: float = global_position.distance_to(p.global_position)
+		if d < best_d:
+			best = p
+	return best
+
+
+## 在群体与玩家中寻找带 APEX 被动的存活者，返回半径内最近者（威压来源）
+func _find_apex_threat() -> Node3D:
+	var best: Node3D = null
+	var best_d: float = APEX_RADIUS
+	for n in get_tree().get_nodes_in_group("ai"):
+		if n == self or not is_instance_valid(n):
+			continue
+		var other: AIDino = n as AIDino
+		if other.is_dead or other.species.passive != DinoSpecies.PassiveAbility.APEX:
+			continue
+		var d: float = global_position.distance_to(other.global_position)
+		if d < best_d:
+			best_d = d
+			best = other
+	var p: PlayerDino = _player()
+	if p != null and not p.is_dead and p.species.passive == DinoSpecies.PassiveAbility.APEX:
 		var d: float = global_position.distance_to(p.global_position)
 		if d < best_d:
 			best = p
