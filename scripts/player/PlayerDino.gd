@@ -90,6 +90,11 @@ var bite_anim_timer: float = 0.0
 
 var camera_yaw: float = 0.0
 var cam_pitch: float = CAM_PITCH
+
+# 相机模式：第一人称 / 第二人称(越肩近身) / 第三人称
+enum CameraMode { FIRST, SHOULDER, THIRD }
+var camera_mode: CameraMode = CameraMode.THIRD
+signal camera_mode_changed(mode_name: String)
 var touch_move_input: Vector2 = Vector2.ZERO
 var _look_delta: Vector2 = Vector2.ZERO
 var touch_drink: bool = false
@@ -304,7 +309,7 @@ func _physics_process(delta: float) -> void:
 	camera_yaw += yaw_input * CAM_YAW_SPEED * delta
 	if _look_delta != Vector2.ZERO:
 		camera_yaw += _look_delta.x * LOOK_SENS
-		cam_pitch = clampf(cam_pitch + _look_delta.y * PITCH_SENS, CAM_PITCH_MIN, CAM_PITCH_MAX)
+		cam_pitch = clampf(cam_pitch + _look_delta.y * PITCH_SENS, _pitch_limits().x, _pitch_limits().y)
 		_look_delta = Vector2.ZERO
 
 	_update_camera_position()
@@ -365,8 +370,42 @@ func _update_vitals(delta: float, sprinting: bool) -> void:
 
 # ================= 摄像机 =================
 func _update_camera_position() -> void:
-	spring_arm.global_position = global_position + Vector3(0.0, CAM_HEIGHT, 0.0)
+	# 眼睛高度随体型缩放；不同模式用不同臂长与侧偏
+	var eye: float = CAM_HEIGHT * current_size
+	var len: float = 5.5
+	var side: float = 0.0
+	match camera_mode:
+		CameraMode.FIRST:
+			len = 0.05
+		CameraMode.SHOULDER:
+			len = 2.6
+			side = 0.7 * current_size
+		CameraMode.THIRD:
+			len = 5.5
+	spring_arm.spring_length = len
+	# 越肩：把相机支点沿"右方"平移，保持始终在右肩后
+	var right := Vector3(cos(camera_yaw), 0.0, -sin(camera_yaw))
+	spring_arm.global_position = global_position + Vector3(0.0, eye, 0.0) + right * side
 	spring_arm.rotation = Vector3(cam_pitch, camera_yaw, 0.0)
+
+
+## 切换相机模式（第一/越肩/第三），并广播当前模式名
+func cycle_camera_mode() -> void:
+	camera_mode = (camera_mode + 1) % 3
+	_update_camera_position()
+	var name_: String = "第三人称"
+	match camera_mode:
+		CameraMode.FIRST: name_ = "第一人称"
+		CameraMode.SHOULDER: name_ = "越肩视角"
+		CameraMode.THIRD: name_ = "第三人称"
+	camera_mode_changed.emit(name_)
+
+
+## 俯仰限制随模式变化（第一人称可抬头看山）
+func _pitch_limits() -> Vector2:
+	if camera_mode == CameraMode.FIRST:
+		return Vector2(-1.45, 0.6)
+	return Vector2(CAM_PITCH_MIN, CAM_PITCH_MAX)
 
 
 ## 触屏视角拖动增量（由 TouchControls.LookZone 调用）

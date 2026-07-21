@@ -334,6 +334,8 @@ func _spawn_touch_controls() -> void:
 	touch_controls.ability_pressed.connect(player.try_ability)
 	touch_controls.drink_pressed.connect(player.set_drink_held)
 	touch_controls.look_input_changed.connect(player.add_look_delta)
+	touch_controls.camera_pressed.connect(player.cycle_camera_mode)
+	player.camera_mode_changed.connect(func(n: String): hud.show_hint("视角：" + n))
 	if player != null and is_instance_valid(player):
 		touch_controls.set_ability_visible(player.has_charge_ability())
 

@@ -1,7 +1,7 @@
 class_name TouchControls
 extends CanvasLayer
-## 触屏操控层：左下虚拟摇杆 + 右下 咬/跳/技能/饮水 按钮
-## 信号桥接到玩家：move_input_changed / bite_pressed / jump_pressed / ability_pressed / drink_pressed
+## 触屏操控层：左下虚拟摇杆 + 右下 咬/跳/技能/饮水 按钮 + 左中「视角」按钮
+## 信号桥接到玩家：move_input_changed / bite_pressed / jump_pressed / ability_pressed / drink_pressed / camera_pressed
 
 signal move_input_changed(vec: Vector2)
 signal bite_pressed
@@ -9,6 +9,7 @@ signal jump_pressed
 signal ability_pressed
 signal drink_pressed(held: bool)
 signal look_input_changed(delta: Vector2)
+signal camera_pressed
 
 const SFX_UI := preload("res://assets/audio/ui.wav")
 
@@ -17,6 +18,7 @@ const SFX_UI := preload("res://assets/audio/ui.wav")
 @onready var jump_button: Button = $Control/JumpButton
 @onready var ability_button: Button = $Control/AbilityButton
 @onready var drink_button: Button = $Control/DrinkButton
+@onready var camera_button: Button = $Control/CameraButton
 @onready var look_zone: LookControl = $Control/LookZone
 var sfx: AudioStreamPlayer
 
@@ -31,6 +33,7 @@ func _ready() -> void:
 	ability_button.pressed.connect(func(): _ui(); ability_pressed.emit())
 	drink_button.button_down.connect(func(): _ui(); drink_pressed.emit(true))
 	drink_button.button_up.connect(func(): drink_pressed.emit(false))
+	camera_button.pressed.connect(func(): _ui(); camera_pressed.emit())
 	look_zone.look_input_changed.connect(func(d: Vector2): look_input_changed.emit(d))
 
 
