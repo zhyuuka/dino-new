@@ -48,6 +48,12 @@ var is_over: bool = false
 var boss_ai: AIDino = null
 var boss_respawn_timer: float = 0.0
 
+# 昼夜循环
+var sun_light: DirectionalLight3D
+var world_env: WorldEnvironment
+var day_t: float = 0.3
+const DAY_LENGTH: float = 120.0
+
 # 装饰材质（一次性创建）
 var mat_trunk: StandardMaterial3D
 var mat_foliage: StandardMaterial3D
@@ -57,6 +63,8 @@ var mat_rock: StandardMaterial3D
 func _ready() -> void:
 	randomize()
 	dynamic = $Dynamic
+	sun_light = $DirectionalLight3D
+	world_env = $WorldEnvironment
 	mat_trunk = StandardMaterial3D.new()
 	mat_trunk.albedo_color = Color(0.4, 0.25, 0.15)
 	mat_trunk.roughness = 0.9
@@ -398,6 +406,9 @@ func _process(delta: float) -> void:
 	if is_over:
 		return
 	survival_time += delta
+	# 昼夜循环
+	day_t = fmod(day_t + delta / DAY_LENGTH, 1.0)
+	_apply_day_night()
 	# 生态维护：数量不足时在边缘补充
 	pop_timer += delta
 	if pop_timer >= RESPAWN_CHECK:
@@ -423,3 +434,28 @@ func _random_ground_pos() -> Vector3:
 	var angle: float = randf() * TAU
 	var dist: float = randf() * (MAP_RADIUS - 6.0)
 	return Vector3(sin(angle) * dist, 0.0, cos(angle) * dist)
+
+
+# ================= 昼夜循环 =================
+func _apply_day_night() -> void:
+	var h: float = sin(day_t * TAU)                 # -1 午夜 .. 1 正午
+	var day: float = clampf(h, 0.0, 1.0)            # 0 夜 .. 1 昼
+	var twilight: float = clampf(1.0 - abs(h) * 3.0, 0.0, 1.0)  # 近地平线辉光
+	if sun_light != null:
+		sun_light.light_energy = lerpf(0.15, 1.25, day)
+		var day_col := Color(1.0, 0.98, 0.9)
+		var dusk_col := Color(1.0, 0.55, 0.3)
+		var night_col := Color(0.4, 0.5, 0.8)
+		var col := night_col.lerp(day_col, day)
+		col = col.lerp(dusk_col, twilight * 0.6)
+		sun_light.light_color = col
+	if world_env != null and world_env.environment != null:
+		var env: Environment = world_env.environment
+		var top := Color(0.1, 0.15, 0.35).lerp(Color(0.35, 0.6, 0.85), day)
+		var hor := Color(0.2, 0.25, 0.4).lerp(Color(0.7, 0.8, 0.92), day)
+		hor = hor.lerp(Color(1.0, 0.5, 0.3), twilight * 0.5)
+		if env.sky != null and env.sky.sky_material is ProceduralSkyMaterial:
+			var sm := env.sky.sky_material as ProceduralSkyMaterial
+			sm.sky_top_color = top
+			sm.sky_horizon_color = hor
+		env.ambient_light_energy = lerpf(0.25, 0.7, day)
