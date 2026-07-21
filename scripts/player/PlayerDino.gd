@@ -78,6 +78,11 @@ var current_hunger: int = HUNGER_MAX
 var current_thirst: int = THIRST_MAX
 var current_stamina: int = STAMINA_MAX
 
+# 矿物盐等临时增益
+var buff_timer: float = 0.0
+var buff_speed_mult: float = 1.0
+var buff_dmg_mult: float = 1.0
+
 var is_dead: bool = false
 var bite_cooldown_timer: float = 0.0
 var is_biting: bool = false
@@ -218,6 +223,12 @@ func _physics_process(delta: float) -> void:
 
 	# 体力与冲刺
 	_update_stamina(delta, move_dir.length() > 0.1)
+	# 增益计时
+	if buff_timer > 0.0:
+		buff_timer -= delta
+		if buff_timer <= 0.0:
+			buff_speed_mult = 1.0
+			buff_dmg_mult = 1.0
 	var sprinting: bool = Input.is_action_pressed("sprint") and can_sprint() and move_dir.length() > 0.1
 	var speed: float = walk_speed
 	if sprinting:
@@ -248,7 +259,7 @@ func _physics_process(delta: float) -> void:
 	else:
 		_update_drink_hint(false)
 
-	var target_vel: Vector3 = move_dir * speed
+	var target_vel: Vector3 = move_dir * speed * buff_speed_mult
 	var accel: float = ACCEL * delta
 	velocity.x = move_toward(velocity.x, target_vel.x, accel)
 	velocity.z = move_toward(velocity.z, target_vel.z, accel)
@@ -381,7 +392,21 @@ func _effective_bite() -> int:
 	var dmg: int = bite_damage
 	if pack_bonus:
 		dmg = int(round(dmg * (1.0 + PACK_DMG_BONUS)))
+	dmg = int(round(dmg * buff_dmg_mult))
 	return dmg
+
+
+## 矿物盐等限时增益
+func apply_buff(dur: float, spd: float, dmg: float) -> void:
+	buff_timer = dur
+	buff_speed_mult = spd
+	buff_dmg_mult = dmg
+
+
+## 巢穴回体力（夹取并广播）
+func restore_stamina(amt: int) -> void:
+	current_stamina = mini(current_stamina + amt, STAMINA_MAX)
+	stamina_changed.emit(current_stamina, STAMINA_MAX)
 
 
 # ================= 技能 =================

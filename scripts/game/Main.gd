@@ -10,6 +10,7 @@ const AIScene: PackedScene = preload("res://scenes/AIDino.tscn")
 const CorpseScene: PackedScene = preload("res://scenes/AICorpse.tscn")
 const WaterScene: PackedScene = preload("res://scenes/WaterSource.tscn")
 const FoliageSpawnerScene: PackedScene = preload("res://scenes/FoliageSpawner.tscn")
+const ResourcePointScene: PackedScene = preload("res://scenes/ResourcePoint.tscn")
 const HUDScene: PackedScene = preload("res://scenes/HUD.tscn")
 const TouchControlsScene: PackedScene = preload("res://scenes/TouchControls.tscn")
 const SpeciesSelectScene: PackedScene = preload("res://scenes/SpeciesSelect.tscn")
@@ -109,6 +110,7 @@ func _start_game(species_id: String, is_continue: bool) -> void:
 	_spawn_water()
 	_spawn_foliage()
 	_spawn_decor()
+	_spawn_resource_points()
 	_spawn_hud()
 	_spawn_player(species_id, stage, gen)
 	_spawn_ecosystem(stage)
@@ -130,6 +132,22 @@ func _spawn_water() -> void:
 func _spawn_foliage() -> void:
 	var fs: FoliageSpawner = FoliageSpawnerScene.instantiate() as FoliageSpawner
 	dynamic.add_child(fs)
+
+
+func _spawn_resource_points() -> void:
+	# 巢穴与矿物盐散布在地图各处（避开水源与出生点）
+	var nests := [Vector3(45.0, 0.0, 50.0), Vector3(-60.0, 0.0, 30.0), Vector3(20.0, 0.0, -70.0)]
+	var licks := [Vector3(-30.0, 0.0, -40.0), Vector3(80.0, 0.0, 20.0), Vector3(-90.0, 0.0, -30.0)]
+	for pos in nests:
+		var rp: ResourcePoint = ResourcePointScene.instantiate() as ResourcePoint
+		rp.point_type = ResourcePoint.Type.NEST
+		rp.global_position = pos
+		dynamic.add_child(rp)
+	for pos in licks:
+		var rp: ResourcePoint = ResourcePointScene.instantiate() as ResourcePoint
+		rp.point_type = ResourcePoint.Type.LICK
+		rp.global_position = pos
+		dynamic.add_child(rp)
 
 
 func _spawn_decor() -> void:
