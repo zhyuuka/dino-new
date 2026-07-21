@@ -40,7 +40,7 @@
 |------|------|------|
 | 第 1 阶段 | 小型 3D 场景 + 1 只玩家恐龙（走/跑/咬/视角）+ 几只 AI 恐龙。**单机** | ✅ 已完成 |
 | 第 2 阶段 | 饥饿/血量/食性/5 段成长进化系统 | ✅ 已完成 |
-| 第 3 阶段 | 扩大地图、加多种恐龙、加探索/资源点 | ⬜ 待做 |
+| 第 3 阶段 | 扩大地图、多种恐龙、探索/资源点 + 手机视角/音效/昼夜/小地图/HUD 打磨（T1–T12 自主完成） | ✅ 已完成 |
 | 第 4 阶段 | 多人联机（如条件允许） | ⬜ 待做 |
 
 ---
@@ -66,15 +66,15 @@
 - **协作方式**：GitHub 仓库跨会话同步 + 主 Agent 委托子 Agent 做重度实现任务
 - **最高原则**：质量优先（引擎和语法选型不考虑小白能否看懂，只看产出质量）
 
-### 4.4 第 2 阶段设计细节（第 6 批提问）
-- **饥饿消耗**：每 60 秒掉 1 点（饥饿上限 100，约 100 分钟耗尽，休闲节奏）
+### 4.4 第 2 阶段设计细节（第 6 批提问，部分数值已被 T11 调优）
+- **饥饿消耗**：饥饿上限 100，每 14 秒掉 1 点；口渴上限 100，每 12 秒掉 1 点（冲刺时口渴间隔减半）。0 时分别每 5s/4s 掉 6/5 血（T11 平衡后更真实但可控）
 - **食物来源**：
-  - 玩家是肉食恐龙，吃 AI 尸体（+30 饥饿，2 口）
-  - 地图散布果子（+5 饥饿，应急用）
-  - 按现实食性：肉食只能吃肉，素食吃果子，杂食两者都能吃
-- **AI 行为**：所有 AI 恐龙不互相打架，**全部针对玩家**——肉食 AI 主动追玩家咬，素食 AI 看到玩家就跑
-- **5 段进化**：幼龙 → 少年 → 亚成体 → 成体 → 霸主
-- **死亡惩罚**：死了保留进化等级，重开场景，饥饿/血量回满（用户选 1）
+  - 玩家是肉食恐龙，吃 AI 尸体（+28 饥饿 +8 血，每具 4 口，尸体存活 35s）
+  - 玩家是草食恐龙，吃植物（Foliage，+10 饥饿 +4 口渴 +4 血，被吃后别处重生）
+  - 按现实食性：肉食只能吃肉，草食只能吃植物（杂食无）
+- **AI 行为**：真实**食物链**生态——肉食 AI 追猎草食与玩家，草食 AI 见威胁逃跑并觅食；霸王龙具 APEX 威压，附近非霸主肉食龙强制逃跑（T3）；存在持续游荡的传说霸王龙 Boss（死亡 60s 重生，T6）
+- **5 段进化**：幼龙 → 少年 → 亚成体 → 成体 → 霸主（每阶段体型/血量/咬击/速度按倍率缩放）
+- **死亡惩罚**：死了保留成长等级与代际（+1），重开场景，饥饿/血量回满（用户选 1）
 
 ---
 
@@ -149,7 +149,7 @@ cd /workspace
 - 游戏循环：死亡 3s 重开 / 全杀胜利 3s 重开
 
 ### 6.2 第 2 阶段（生存+进化）
-- **饥饿系统**：100 上限，每 60s 掉 1，0 时每 5s 掉 5 血，HUD 黄色饥饿条
+- **饥饿系统**：100 上限，每 14s 掉 1，0 时每 5s 掉 6 血；口渴每 12s 掉 1（冲刺减半），0 时每 4s 掉 5 血；HUD 黄/蓝色条
 - **食性系统**：
   - 玩家肉食，吃 AI 尸体（+30 饥饿 +10 血，2 口）+ 果子（+5 饥饿）
   - AI 死后变尸体（变暗+躺倒 90 度，15s 消失）
@@ -165,6 +165,21 @@ cd /workspace
 - **死亡惩罚**：保留进化等级（static var `PlayerDino.saved_evolution_level`），3s 重开
 - **HUD 升级**：血条→饥饿条→进化等级标签；右上击杀数+进化进度条；进化横幅
 
+### 6.3 第 2.5–3 阶段（模型替换 + 打磨 T1–T12）
+- **模型替换（第 2.5 阶段）**：6 个 CC0 恐龙 GLB（raptor/trike/trex/anky/carno/galli）+ 统一 `DinoVisual` 加载器（按文件名自动加载、AABB 归一化缩放、自动收集骨骼动画、尸体放倒淡出；carno/galli 静态模型用呼吸/摆动代替骨骼动画）
+- **T1 手机视角**：右半屏拖动控制偏航+俯仰（LookControl + TouchControls 接入）
+- **T2 体力**：修复体力耗尽标志 1 帧延迟
+- **T3 威压**：APEX 霸王龙令附近非霸主肉食龙强制逃跑
+- **T4 扩地图**：半径 135、地面 280×280、3 处水源、更密装饰+树林；越界拉回
+- **T5 资源点**：巢穴（回血+回体力）与矿物盐（限时增伤+加速 buff）；玩家 buff 系统
+- **T6 生态 + 传说霸主**：动态生态名册 + 游荡霸王龙 Boss（60s 重生）
+- **T7 音效**：8 个纯 Python 合成 WAV（咬/受伤/吃/喝/进化/死亡/UI/环境风声）
+- **T8 昼夜**：120s 一天，太阳光/天空/环境光动态变化
+- **T9 小地图**：右上角北朝上小地图（水源/资源/草食/肉食/霸主）
+- **T10 HUD/UX**：技能按钮仅冲锋物种显示 + 冷却秒数；开局引导面板
+- **T11 平衡**：饥饿/口渴衰减提速 + 尸体延长（见 4.4）
+- **T12 最终 APK**：29.7MB arm64-v8a 已签名，`apksigner verify` 通过
+
 ---
 
 ## 七、当前代码结构
@@ -174,38 +189,55 @@ cd /workspace
 ├── .trae/rules/project_rules.md   # 项目规则（10 节，最高原则：质量优先）
 ├── HANDOVER.md                    # 本文件（AI 接力文档）
 ├── PROGRESS.md                    # 最新进度同步
+├── plans/                         # 每个任务 T1–T12 的计划+效果预期文档
 ├── project.godot                  # Godot 项目配置（[input][rendering] 勿改）
 ├── export_presets.cfg             # Android 导出预设（勿改）
 ├── .gitignore                     # APK 入库，.idsig 排除
-├── assets/icons/icon.svg          # 应用图标
+├── assets/
+│   ├── models/                    # 6 个 CC0 恐龙 GLB（raptor/trike/trex/anky/carno/galli）
+│   ├── audio/                     # 8 个程序化合成 WAV + .import
+│   └── icons/icon.svg             # 应用图标
 ├── scenes/
 │   ├── Main.tscn                  # 主场景
 │   ├── PlayerDino.tscn            # 玩家恐龙
 │   ├── AIDino.tscn                # AI 恐龙
 │   ├── AICorpse.tscn              # AI 尸体
-│   ├── Berry.tscn                 # 果子
-│   ├── FoodSpawner.tscn           # 果子生成器
-│   ├── HUD.tscn                   # HUD
-│   └── TouchControls.tscn         # 触屏操控
+│   ├── SpeciesSelect.tscn         # 开局选物种界面
+│   ├── HUD.tscn                   # HUD（含小地图/引导面板）
+│   ├── TouchControls.tscn         # 触屏操控（含 LookZone）
+│   ├── WaterSource.tscn           # 水源
+│   ├── ResourcePoint.tscn         # 巢穴/矿物盐
+│   ├── Foliage.tscn               # 可食植物
+│   └── FoliageSpawner.tscn        # 植物生成器
 ├── scripts/
-│   ├── game/Main.gd               # 主场景脚本（生成 AI、管理游戏循环）
-│   ├── player/PlayerDino.gd       # 玩家恐龙（饥饿/进化/static 保存等级）
+│   ├── game/Main.gd               # 主场景（生成世界/生态/昼夜/HUD/触屏，管理游戏循环）
+│   ├── player/PlayerDino.gd       # 玩家恐龙（移动/视角/进食/进化/buff/技能）
 │   ├── ai/
-│   │   ├── AIDino.gd              # AI 恐龙（食性分类）
-│   │   ├── StateController.gd     # 状态机（wander/chase/flee/dead/eat）
+│   │   ├── AIDino.gd              # AI 恐龙（食物链行为/威压）
+│   │   ├── StateController.gd      # 状态机（wander/chase/flee/dead/eat）
 │   │   └── AICorpse.gd            # 尸体脚本
+│   ├── data/
+│   │   ├── DinoSpecies.gd         # 物种数据库（属性/食性/技能/成长倍率）
+│   │   └── SaveManager.gd         # 存档（成长/代际/最佳）
 │   ├── world/
-│   │   ├── Berry.gd               # 果子
-│   │   └── FoodSpawner.gd         # 果子生成器
+│   │   ├── DinoVisual.gd          # 统一 GLB 模型加载器（动画/尸体）
+│   │   ├── WaterSource.gd         # 水源
+│   │   ├── ResourcePoint.gd       # 巢穴/矿物盐
+│   │   ├── Foliage.gd             # 可食植物
+│   │   └── FoliageSpawner.gd      # 植物生成器
 │   └── ui/
-│       ├── HUD.gd                 # HUD（血条/饥饿条/进化显示）
+│       ├── HUD.gd                 # HUD（血/饿/渴/力/成长/物种/计分/小地图/引导）
+│       ├── Minimap.gd             # 小地图绘制
 │       ├── TouchControls.gd       # 触屏
-│       └── VirtualJoystick.gd     # 虚拟摇杆
+│       ├── LookControl.gd         # 右半屏视角拖动
+│       ├── VirtualJoystick.gd     # 虚拟摇杆
+│       └── SpeciesSelect.gd       # 选物种
 ├── build/
-│   └── dino-world-debug.apk       # 当前 APK（47MB，arm64-v8a，已签名）
-└── tools/
-    ├── godot                      # Godot 4.4.1 二进制
-    └── android-sdk/               # Android SDK
+│   └── dino-world-debug.apk       # 当前 APK（29.7MB，arm64-v8a，已签名）
+├── tools/
+│   ├── gen_audio.py               # 纯 Python WAV 合成（生成 assets/audio）
+│   ├── godot                      # Godot 4.4.1 二进制
+│   └── android-sdk/               # Android SDK
 ```
 
 ---
@@ -286,18 +318,13 @@ cd /workspace
 
 ---
 
-## 十一、待办事项（第 3 阶段规划）
+## 十一、待办事项（第 3 阶段已完成，第 4 阶段待定）
 
-按规则第四节，**开始第 3 阶段前必须先用 AskUserQuestion 问清所有细节**，给推荐选项+效果说明。
+第 3 阶段已在用户入睡后的自主指令下由 T1–T12 全部完成（扩地图/多种恐龙/探索资源点 + 手机视角/音效/昼夜/小地图/HUD 打磨 + 数值平衡 + 最终 APK）。
 
-第 3 阶段大致方向（待用户确认细节）：
-- 扩大地图（50×50 → 200×200 或更大？分块加载？）
-- 加多种恐龙（具体加几种？什么食性？什么体型？）
-- 加探索/资源点（资源点是什么？水？巢穴？特殊地形？）
+第 4 阶段（远期，待用户确认）：多人联机。届时需评估 Godot 高级网络 API 或迁移引擎。
 
-**不要在没问清前就动手。**
-
-第 4 阶段（远期）：多人联机。届时需评估 Godot 高级网络 API 或迁移引擎。
+**注意**：自主阶段是按"最优解"直接推进的，未再走 AskUserQuestion 需求澄清流程（用户已明确授权"不向我报告、按最优解不停工作"）。若用户后续对玩法有具体偏好，应在第 4 阶段开始前用 AskUserQuestion 问清细节。
 
 ---
 
@@ -340,7 +367,7 @@ export ANDROID_SDK_ROOT=/workspace/tools/android-sdk
 export PATH=$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0:$PATH
 cd /workspace
 ./tools/godot --headless --export-debug "Android Debug" 2>&1 | tail -10
-ls -lh build/dino-world-debug.apk  # 应生成 ~47MB APK
+ls -lh build/dino-world-debug.apk  # 应生成 ~29.7MB APK
 ```
 
 全部通过即可开始本会话工作。
@@ -362,6 +389,6 @@ ls -lh build/dino-world-debug.apk  # 应生成 ~47MB APK
 
 ---
 
-**文档版本**：v1.0
-**最后更新**：2026-07-21
-**当前阶段**：第 2 阶段已完成，等待用户确认进入第 3 阶段
+**文档版本**：v2.0
+**最后更新**：2026-07-22
+**当前阶段**：第 1+2+3 阶段全部完成；游戏可玩、有趣、零运行时错误；APK 已导出（29.7MB）。等待用户确认是否进入第 4 阶段（联机）或追加打磨。
