@@ -21,6 +21,7 @@ var _lick_hinted: bool = false
 
 
 func _ready() -> void:
+	add_to_group("resource")
 	_build_visual()
 
 
