@@ -1,4 +1,4 @@
-[gd_scene load_steps=16 format=3 uid="uid://b5main2dino1ph"]
+[gd_scene load_steps=12 format=3 uid="uid://b5main2dino1ph"]
 
 [ext_resource type="Script" path="res://scripts/game/Main.gd" id="1_main"]
 
@@ -22,31 +22,17 @@ tonemap_mode = 2
 glow_enabled = true
 glow_intensity = 0.5
 
-[sub_resource type="StandardMaterial3D" id="mat_floor"]
-albedo_color = Color(0.35, 0.6, 0.3, 1)
-roughness = 0.95
-
-[sub_resource type="StandardMaterial3D" id="mat_dry"]
-albedo_color = Color(0.62, 0.55, 0.32, 1)
-roughness = 0.95
-
 [sub_resource type="BoxShape3D" id="shape_wall_n"]
-size = Vector3(280, 4, 1)
+size = Vector3(264, 30, 1)
 
 [sub_resource type="BoxShape3D" id="shape_wall_s"]
-size = Vector3(280, 4, 1)
+size = Vector3(264, 30, 1)
 
 [sub_resource type="BoxShape3D" id="shape_wall_e"]
-size = Vector3(1, 4, 280)
+size = Vector3(1, 30, 264)
 
 [sub_resource type="BoxShape3D" id="shape_wall_w"]
-size = Vector3(1, 4, 280)
-
-[sub_resource type="BoxShape3D" id="shape_floor"]
-size = Vector3(280, 1, 280)
-
-[sub_resource type="BoxShape3D" id="shape_dry"]
-size = Vector3(110, 0.2, 110)
+size = Vector3(1, 30, 264)
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1_main")
@@ -59,21 +45,10 @@ shadow_enabled = true
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("env")
 
-[node name="Floor" type="CSGBox3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
-size = Vector3(280, 1, 280)
-use_collision = true
-material = SubResource("mat_floor")
-
-[node name="DryPatch" type="CSGBox3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 55, 0.05, -55)
-size = Vector3(110, 0.2, 110)
-material = SubResource("mat_dry")
-
 [node name="BoundaryWalls" type="Node3D" parent="."]
 
 [node name="WallNorth" type="StaticBody3D" parent="BoundaryWalls"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, -140)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 15, -132)
 collision_layer = 1
 collision_mask = 0
 
@@ -81,7 +56,7 @@ collision_mask = 0
 shape = SubResource("shape_wall_n")
 
 [node name="WallSouth" type="StaticBody3D" parent="BoundaryWalls"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 140)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 15, 132)
 collision_layer = 1
 collision_mask = 0
 
@@ -89,7 +64,7 @@ collision_mask = 0
 shape = SubResource("shape_wall_s")
 
 [node name="WallEast" type="StaticBody3D" parent="BoundaryWalls"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 140, 2, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 132, 15, 0)
 collision_layer = 1
 collision_mask = 0
 
@@ -97,7 +72,7 @@ collision_mask = 0
 shape = SubResource("shape_wall_e")
 
 [node name="WallWest" type="StaticBody3D" parent="BoundaryWalls"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -140, 2, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -132, 15, 0)
 collision_layer = 1
 collision_mask = 0
 

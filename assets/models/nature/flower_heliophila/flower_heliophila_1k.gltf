@@ -1,0 +1,330 @@
+{
+  "asset": {
+    "generator": "Khronos glTF Blender I/O v4.2.60",
+    "version": "2.0"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "Scene",
+      "nodes": [
+        0,
+        1,
+        2
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "mesh": 0,
+      "name": "flower_heliophila_large",
+      "translation": [
+        -0.5,
+        0,
+        0
+      ]
+    },
+    {
+      "mesh": 1,
+      "name": "flower_heliophila_medium",
+      "translation": [
+        0.5,
+        0,
+        0
+      ]
+    },
+    {
+      "mesh": 2,
+      "name": "flower_heliophila_small",
+      "translation": [
+        1.100000023841858,
+        0,
+        0
+      ]
+    }
+  ],
+  "materials": [
+    {
+      "alphaMode": "BLEND",
+      "doubleSided": true,
+      "name": "flower_heliophila",
+      "normalTexture": {
+        "index": 0
+      },
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 1
+        },
+        "metallicFactor": 0,
+        "metallicRoughnessTexture": {
+          "index": 2
+        }
+      }
+    }
+  ],
+  "meshes": [
+    {
+      "name": "Plane.5122",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0,
+            "NORMAL": 1,
+            "TEXCOORD_0": 2
+          },
+          "indices": 3,
+          "material": 0
+        }
+      ]
+    },
+    {
+      "name": "Plane.5143",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 4,
+            "NORMAL": 5,
+            "TEXCOORD_0": 6
+          },
+          "indices": 7,
+          "material": 0
+        }
+      ]
+    },
+    {
+      "name": "Plane.2197",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 8,
+            "NORMAL": 9,
+            "TEXCOORD_0": 10
+          },
+          "indices": 11,
+          "material": 0
+        }
+      ]
+    }
+  ],
+  "textures": [
+    {
+      "sampler": 0,
+      "source": 0
+    },
+    {
+      "sampler": 0,
+      "source": 1
+    },
+    {
+      "sampler": 0,
+      "source": 2
+    }
+  ],
+  "images": [
+    {
+      "mimeType": "image/jpeg",
+      "name": "flower_heliophila_nor_gl",
+      "uri": "textures/flower_heliophila_nor_gl_1k.jpg"
+    },
+    {
+      "mimeType": "image/jpeg",
+      "name": "flower_heliophila_diff-flower_heliophila_alpha",
+      "uri": "textures/flower_heliophila_diff_1k.jpg"
+    },
+    {
+      "mimeType": "image/jpeg",
+      "name": "flower_heliophila_rough",
+      "uri": "textures/flower_heliophila_arm_1k.jpg"
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 30187,
+      "max": [
+        0.742993175983429,
+        0.39436638355255127,
+        0.794323742389679
+      ],
+      "min": [
+        -0.9197109937667847,
+        -0.004596852231770754,
+        -0.6230731010437012
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 30187,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "componentType": 5126,
+      "count": 30187,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 3,
+      "componentType": 5123,
+      "count": 154551,
+      "type": "SCALAR"
+    },
+    {
+      "bufferView": 4,
+      "componentType": 5126,
+      "count": 19261,
+      "max": [
+        0.34404146671295166,
+        0.37000688910484314,
+        0.2995302379131317
+      ],
+      "min": [
+        -0.33027079701423645,
+        -0.004912722855806351,
+        -0.30207517743110657
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 5,
+      "componentType": 5126,
+      "count": 19261,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 6,
+      "componentType": 5126,
+      "count": 19261,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 7,
+      "componentType": 5123,
+      "count": 97533,
+      "type": "SCALAR"
+    },
+    {
+      "bufferView": 8,
+      "componentType": 5126,
+      "count": 10241,
+      "max": [
+        0.23434603214263916,
+        0.26880577206611633,
+        0.11743366718292236
+      ],
+      "min": [
+        -0.10914008319377899,
+        -0.0009147088858298957,
+        -0.1566925048828125
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 9,
+      "componentType": 5126,
+      "count": 10241,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 10,
+      "componentType": 5126,
+      "count": 10241,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 11,
+      "componentType": 5123,
+      "count": 52779,
+      "type": "SCALAR"
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteLength": 362244,
+      "byteOffset": 0,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 362244,
+      "byteOffset": 362244,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 241496,
+      "byteOffset": 724488,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 309102,
+      "byteOffset": 965984,
+      "target": 34963
+    },
+    {
+      "buffer": 0,
+      "byteLength": 231132,
+      "byteOffset": 1275088,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 231132,
+      "byteOffset": 1506220,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 154088,
+      "byteOffset": 1737352,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 195066,
+      "byteOffset": 1891440,
+      "target": 34963
+    },
+    {
+      "buffer": 0,
+      "byteLength": 122892,
+      "byteOffset": 2086508,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 122892,
+      "byteOffset": 2209400,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 81928,
+      "byteOffset": 2332292,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 105558,
+      "byteOffset": 2414220,
+      "target": 34963
+    }
+  ],
+  "samplers": [
+    {
+      "magFilter": 9729,
+      "minFilter": 9987
+    }
+  ],
+  "buffers": [
+    {
+      "byteLength": 2519780,
+      "uri": "flower_heliophila.bin"
+    }
+  ]
+}

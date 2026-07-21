@@ -1,0 +1,485 @@
+{
+  "asset": {
+    "generator": "Khronos glTF Blender I/O v4.4.56",
+    "version": "2.0"
+  },
+  "extensionsUsed": [
+    "KHR_materials_specular",
+    "KHR_materials_ior"
+  ],
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "Scene",
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "mesh": 0,
+      "name": "jacaranda_tree_LOD0"
+    }
+  ],
+  "materials": [
+    {
+      "doubleSided": true,
+      "extensions": {
+        "KHR_materials_specular": {
+          "specularFactor": 0.6000000238418579
+        },
+        "KHR_materials_ior": {
+          "ior": 1.4500000476837158
+        }
+      },
+      "name": "jacaranda_tree_branches",
+      "normalTexture": {
+        "index": 0
+      },
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 1
+        },
+        "metallicFactor": 0,
+        "metallicRoughnessTexture": {
+          "index": 2
+        }
+      }
+    },
+    {
+      "doubleSided": true,
+      "extensions": {
+        "KHR_materials_specular": {
+          "specularFactor": 0.6000000238418579
+        },
+        "KHR_materials_ior": {
+          "ior": 1.4500000476837158
+        }
+      },
+      "name": "jacaranda_tree_trunk",
+      "normalTexture": {
+        "index": 3
+      },
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 4
+        },
+        "metallicFactor": 0,
+        "metallicRoughnessTexture": {
+          "index": 5
+        }
+      }
+    },
+    {
+      "alphaMode": "BLEND",
+      "doubleSided": true,
+      "name": "jacaranda_tree_leaves",
+      "normalTexture": {
+        "index": 6
+      },
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 7
+        },
+        "metallicFactor": 0,
+        "metallicRoughnessTexture": {
+          "index": 8
+        }
+      }
+    }
+  ],
+  "meshes": [
+    {
+      "name": "tree.016",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0,
+            "NORMAL": 1,
+            "TEXCOORD_0": 2,
+            "COLOR_0": 3,
+            "COLOR_1": 4
+          },
+          "indices": 5,
+          "material": 0
+        },
+        {
+          "attributes": {
+            "POSITION": 6,
+            "NORMAL": 7,
+            "TEXCOORD_0": 8,
+            "COLOR_0": 9,
+            "COLOR_1": 10
+          },
+          "indices": 11,
+          "material": 1
+        },
+        {
+          "attributes": {
+            "POSITION": 12,
+            "NORMAL": 13,
+            "TEXCOORD_0": 14,
+            "COLOR_0": 15,
+            "COLOR_1": 16
+          },
+          "indices": 17,
+          "material": 2
+        }
+      ]
+    }
+  ],
+  "textures": [
+    {
+      "sampler": 0,
+      "source": 0
+    },
+    {
+      "sampler": 0,
+      "source": 1
+    },
+    {
+      "sampler": 0,
+      "source": 2
+    },
+    {
+      "sampler": 0,
+      "source": 3
+    },
+    {
+      "sampler": 0,
+      "source": 4
+    },
+    {
+      "sampler": 0,
+      "source": 5
+    },
+    {
+      "sampler": 0,
+      "source": 6
+    },
+    {
+      "sampler": 0,
+      "source": 7
+    },
+    {
+      "sampler": 0,
+      "source": 8
+    }
+  ],
+  "images": [
+    {
+      "mimeType": "image/jpeg",
+      "name": "jacaranda_tree_branches_nor_gl",
+      "uri": "textures/jacaranda_tree_branches_nor_gl_1k.jpg"
+    },
+    {
+      "mimeType": "image/jpeg",
+      "name": "jacaranda_tree_branches_diff",
+      "uri": "textures/jacaranda_tree_branches_diff_1k.jpg"
+    },
+    {
+      "mimeType": "image/jpeg",
+      "name": "jacaranda_tree_branches_rough",
+      "uri": "textures/jacaranda_tree_branches_arm_1k.jpg"
+    },
+    {
+      "mimeType": "image/jpeg",
+      "name": "jacaranda_tree_trunk_nor_gl",
+      "uri": "textures/jacaranda_tree_trunk_nor_gl_1k.jpg"
+    },
+    {
+      "mimeType": "image/jpeg",
+      "name": "jacaranda_tree_trunk_diff",
+      "uri": "textures/jacaranda_tree_trunk_diff_1k.jpg"
+    },
+    {
+      "mimeType": "image/jpeg",
+      "name": "jacaranda_tree_trunk_rough",
+      "uri": "textures/jacaranda_tree_trunk_arm_1k.jpg"
+    },
+    {
+      "mimeType": "image/jpeg",
+      "name": "jacaranda_tree_leaves_nor_gl",
+      "uri": "textures/jacaranda_tree_leaves_nor_gl_1k.jpg"
+    },
+    {
+      "mimeType": "image/jpeg",
+      "name": "jacaranda_tree_leaves_diff-jacaranda_tree_leaves_alpha",
+      "uri": "textures/jacaranda_tree_leaves_diff_1k.jpg"
+    },
+    {
+      "mimeType": "image/jpeg",
+      "name": "jacaranda_tree_leaves_rough",
+      "uri": "textures/jacaranda_tree_leaves_arm_1k.jpg"
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 919844,
+      "max": [
+        11.28077507019043,
+        19.267589569091797,
+        9.080706596374512
+      ],
+      "min": [
+        -12.889074325561523,
+        2.2754554748535156,
+        -9.659333229064941
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 919844,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "componentType": 5126,
+      "count": 919844,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 3,
+      "componentType": 5121,
+      "count": 919844,
+      "normalized": true,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 4,
+      "componentType": 5123,
+      "count": 919844,
+      "normalized": true,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 5,
+      "componentType": 5125,
+      "count": 3693858,
+      "type": "SCALAR"
+    },
+    {
+      "bufferView": 6,
+      "componentType": 5126,
+      "count": 121378,
+      "max": [
+        5.367859363555908,
+        10.20097827911377,
+        2.6690657138824463
+      ],
+      "min": [
+        -3.486842155456543,
+        -0.146615132689476,
+        -3.8195481300354004
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 7,
+      "componentType": 5126,
+      "count": 121378,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 8,
+      "componentType": 5126,
+      "count": 121378,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 9,
+      "componentType": 5121,
+      "count": 121378,
+      "normalized": true,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 10,
+      "componentType": 5123,
+      "count": 121378,
+      "normalized": true,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 11,
+      "componentType": 5125,
+      "count": 690336,
+      "type": "SCALAR"
+    },
+    {
+      "bufferView": 12,
+      "componentType": 5126,
+      "count": 2639274,
+      "max": [
+        11.496798515319824,
+        19.3222599029541,
+        9.200760841369629
+      ],
+      "min": [
+        -12.92025089263916,
+        2.102717399597168,
+        -9.953813552856445
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 13,
+      "componentType": 5126,
+      "count": 2639274,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 14,
+      "componentType": 5126,
+      "count": 2639274,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 15,
+      "componentType": 5121,
+      "count": 2639274,
+      "normalized": true,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 16,
+      "componentType": 5123,
+      "count": 2639274,
+      "normalized": true,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 17,
+      "componentType": 5125,
+      "count": 7207302,
+      "type": "SCALAR"
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteLength": 11038128,
+      "byteOffset": 0,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 11038128,
+      "byteOffset": 11038128,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 7358752,
+      "byteOffset": 22076256,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 3679376,
+      "byteOffset": 29435008,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 7358752,
+      "byteOffset": 33114384,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 14775432,
+      "byteOffset": 40473136,
+      "target": 34963
+    },
+    {
+      "buffer": 0,
+      "byteLength": 1456536,
+      "byteOffset": 55248568,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 1456536,
+      "byteOffset": 56705104,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 971024,
+      "byteOffset": 58161640,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 485512,
+      "byteOffset": 59132664,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 971024,
+      "byteOffset": 59618176,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 2761344,
+      "byteOffset": 60589200,
+      "target": 34963
+    },
+    {
+      "buffer": 0,
+      "byteLength": 31671288,
+      "byteOffset": 63350544,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 31671288,
+      "byteOffset": 95021832,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 21114192,
+      "byteOffset": 126693120,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 10557096,
+      "byteOffset": 147807312,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 21114192,
+      "byteOffset": 158364408,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 28829208,
+      "byteOffset": 179478600,
+      "target": 34963
+    }
+  ],
+  "samplers": [
+    {
+      "magFilter": 9729,
+      "minFilter": 9987
+    }
+  ],
+  "buffers": [
+    {
+      "byteLength": 208307808,
+      "uri": "jacaranda_tree.bin"
+    }
+  ]
+}
