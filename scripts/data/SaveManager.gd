@@ -8,16 +8,23 @@ const SAVE_PATH := "user://save.json"
 ## 读取存档；无文件或损坏返回空字典
 static func load_save() -> Dictionary:
 	if not FileAccess.file_exists(SAVE_PATH):
-		return {}
+		return _ensure_defaults({})
 	var f := FileAccess.open(SAVE_PATH, FileAccess.READ)
 	if f == null:
-		return {}
+		return _ensure_defaults({})
 	var txt := f.get_as_text()
 	f.close()
 	var parsed = JSON.parse_string(txt)
 	if parsed == null or typeof(parsed) != TYPE_DICTIONARY:
-		return {}
-	return parsed
+		return _ensure_defaults({})
+	return _ensure_defaults(parsed)
+
+
+## 补默认值：地图 id 缺省为森林谷地
+static func _ensure_defaults(d: Dictionary) -> Dictionary:
+	if not d.has("map_id"):
+		d["map_id"] = "forest"
+	return d
 
 ## 写入存档
 static func write_save(d: Dictionary) -> void:

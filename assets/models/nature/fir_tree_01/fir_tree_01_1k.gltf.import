@@ -3,12 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://bmqqtfacxqgwv"
-valid=false
+uid="uid://b4qlrn683osf2"
+path="res://.godot/imported/fir_tree_01_1k.gltf-63f5d62fe5c7bc5b7818a6e22e9f73df.scn"
 
 [deps]
 
 source_file="res://assets/models/nature/fir_tree_01/fir_tree_01_1k.gltf"
+dest_files=["res://.godot/imported/fir_tree_01_1k.gltf-63f5d62fe5c7bc5b7818a6e22e9f73df.scn"]
 
 [params]
 

@@ -7,8 +7,9 @@ godot4
 
 # === Android SDK / 构建产物 ===
 android-sdk/
-# APK 是最终交付物，需要入库让用户从 GitHub 直接下载
-# *.apk  ← 不排除 APK
+# APK(699MB) 超过 GitHub 单文件 100MB 上限，不入库；改为 GitHub Release 分发
+# 发布：gh release create v0.1 build/dino-world-debug.apk
+*.apk
 *.aab
 *.apk.idsig
 *.keystore

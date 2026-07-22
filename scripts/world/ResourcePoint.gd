@@ -32,7 +32,6 @@ func _build_visual() -> void:
 			var ring := CSGTorus3D.new()
 			ring.inner_radius = 3.0
 			ring.outer_radius = 4.2
-			ring.height = 0.6
 			ring.rotation = Vector3(PI * 0.5, 0.0, 0.0)
 			ring.position = Vector3(0, 0.3, 0)
 			var m := StandardMaterial3D.new()

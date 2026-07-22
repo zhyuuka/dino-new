@@ -17,25 +17,24 @@ func setup(def: Maps.MapDef) -> void:
 	_generate_heights()
 	_carve_water_basins()
 	_build_mesh()
-	_build_collision()
 
 
 func _idx(i: int, j: int) -> int:
 	return j * (SEGMENTS + 1) + i
 
 
-func _get(i: int, j: int) -> float:
+func _hget(i: int, j: int) -> float:
 	return _heights[_idx(i, j)]
 
 
-func _set(i: int, j: int, v: float) -> void:
+func _hset(i: int, j: int, v: float) -> void:
 	_heights[_idx(i, j)] = v
 
 
 func _generate_heights() -> void:
 	if _def.mode == 1 and ResourceLoader.exists("res://" + _def.heightmap_path):
-		var img := Image.new()
-		if img.load_from_file("res://" + _def.heightmap_path) == OK:
+		var img := Image.load_from_file("res://" + _def.heightmap_path)
+		if img != null:
 			var w := img.get_width(); var h := img.get_height()
 			for j in SEGMENTS + 1:
 				for i in SEGMENTS + 1:
@@ -46,7 +45,7 @@ func _generate_heights() -> void:
 					var hgt := img.get_pixel(px, py).r
 					# 高度图偏暗，提升对比以露出峡谷
 					hgt = pow(hgt, 1.4)
-					_set(i, j, hgt * _def.max_height)
+					_hset(i, j, hgt * _def.max_height)
 			return
 	# 回退用噪声
 	var n := FastNoiseLite.new()
@@ -62,7 +61,7 @@ func _generate_heights() -> void:
 			var z := (j - SEGMENTS * 0.5) * CELL
 			var h := n.get_noise_2d(x, z) * 0.5 + 0.5   # 0..1
 			h = pow(h, 1.3)
-			_set(i, j, h * _def.max_height)
+			_hset(i, j, h * _def.max_height)
 
 
 ## 在每个水源周围下挖盆地，使湖面自然下沉
@@ -81,8 +80,8 @@ func _carve_water_basins() -> void:
 					continue
 				var t := 1.0 - d / float(r)
 				var target := _def.water_level - 0.6
-				var v := lerpf(_get(i, j), target, t * 0.92)
-				_set(i, j, v)
+				var v := lerpf(_hget(i, j), target, t * 0.92)
+				_hset(i, j, v)
 
 
 func _color_for_height(y: float) -> Color:
@@ -102,7 +101,7 @@ func _build_mesh() -> void:
 		for i in SEGMENTS + 1:
 			var x := (i - SEGMENTS * 0.5) * CELL
 			var z := (j - SEGMENTS * 0.5) * CELL
-			var y := _get(i, j)
+			var y := _hget(i, j)
 			st.set_color(_color_for_height(y))
 			st.add_vertex(Vector3(x, y, z))
 	for j in SEGMENTS:
@@ -123,8 +122,7 @@ func _build_mesh() -> void:
 	mi.name = "TerrainMesh"
 	mi.mesh = mesh
 	mi.material_override = mat
-	mi.cast_shadow = false
-	mi.receive_shadow = true
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(mi)
 	mi.create_trimesh_collision()
 
@@ -138,8 +136,8 @@ func get_height(x: float, z: float) -> float:
 	var i0 := int(fi); var j0 := int(fj)
 	var i1 := mini(i0 + 1, SEGMENTS); var j1 := mini(j0 + 1, SEGMENTS)
 	var tx := fi - i0; var tz := fj - j0
-	var h0 := lerpf(_get(i0, j0), _get(i1, j0), tx)
-	var h1 := lerpf(_get(i0, j1), _get(i1, j1), tx)
+	var h0 := lerpf(_hget(i0, j0), _hget(i1, j0), tx)
+	var h1 := lerpf(_hget(i0, j1), _hget(i1, j1), tx)
 	return lerpf(h0, h1, tz)
 
 

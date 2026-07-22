@@ -8,9 +8,21 @@ signal eaten(pos: Vector3)
 
 @onready var plant_area: Area3D = $PlantArea
 
+## 由 FoliageSpawner 注入：要渲染的自然模型 slug（空则用旧 CSG 球兜底）
+var visual_slug: String = ""
+
 
 func _ready() -> void:
 	add_to_group("plant")
+	if visual_slug != "":
+		var path := "res://assets/models/nature/%s/%s_1k.gltf" % [visual_slug, visual_slug]
+		if ResourceLoader.exists(path):
+			var scn := load(path) as PackedScene
+			if scn != null:
+				var inst := scn.instantiate()
+				inst.scale = Vector3(0.6, 0.6, 0.6)
+				inst.rotation = Vector3(0, randf() * TAU, 0)
+				add_child(inst)
 	if plant_area != null:
 		plant_area.body_entered.connect(_on_body_entered)
 

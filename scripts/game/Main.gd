@@ -14,6 +14,7 @@ const ResourcePointScene: PackedScene = preload("res://scenes/ResourcePoint.tscn
 const HUDScene: PackedScene = preload("res://scenes/HUD.tscn")
 const TouchControlsScene: PackedScene = preload("res://scenes/TouchControls.tscn")
 const SpeciesSelectScene: PackedScene = preload("res://scenes/SpeciesSelect.tscn")
+const MapSelectScene: PackedScene = preload("res://scenes/MapSelect.tscn")
 
 # 环境音（程序化合成风声，循环）
 const SFX_AMBIENT := preload("res://assets/audio/ambient.wav")
@@ -21,13 +22,9 @@ const SFX_AMBIENT := preload("res://assets/audio/ambient.wav")
 # 首次启动是否跳过选种界面（交付时必须为 false，让玩家先选物种）
 static var skip_select: bool = false
 
-const MAP_RADIUS: float = 135.0
-# 多个水源：主湖 + 两处池塘，分散在大地图上
-const WATER_POINTS: Array = [
-	Vector3(-45.0, 0.0, 45.0),   # 主湖
-	Vector3(70.0, 0.0, -55.0),   # 东池塘
-	Vector3(-80.0, 0.0, -70.0),  # 西南池塘
-]
+# 地图半径由地形半幅决定（无地形时回退 135）
+func _map_radius() -> float:
+	return terrain.half_extent - 6.0 if terrain != null else 135.0
 const LAKE_RADIUS: float = 18.0
 const PLAYER_SPAWN: Vector3 = Vector3(0.0, 1.5, 0.0)
 const TARGET_POP: int = 12
@@ -39,6 +36,10 @@ var dynamic: Node3D
 var hud: HUD
 var touch_controls: TouchControls
 var species_select: SpeciesSelect
+
+# 地形生成器（替代旧的 CSG 地板）
+var terrain: TerrainGenerator
+var _map_def: Maps.MapDef
 
 var kill_count: int = 0
 var survival_time: float = 0.0
@@ -54,26 +55,12 @@ var world_env: WorldEnvironment
 var day_t: float = 0.3
 const DAY_LENGTH: float = 120.0
 
-# 装饰材质（一次性创建）
-var mat_trunk: StandardMaterial3D
-var mat_foliage: StandardMaterial3D
-var mat_rock: StandardMaterial3D
-
 
 func _ready() -> void:
 	randomize()
 	dynamic = $Dynamic
 	sun_light = $DirectionalLight3D
 	world_env = $WorldEnvironment
-	mat_trunk = StandardMaterial3D.new()
-	mat_trunk.albedo_color = Color(0.4, 0.25, 0.15)
-	mat_trunk.roughness = 0.9
-	mat_foliage = StandardMaterial3D.new()
-	mat_foliage.albedo_color = Color(0.2, 0.45, 0.18)
-	mat_foliage.roughness = 0.85
-	mat_rock = StandardMaterial3D.new()
-	mat_rock.albedo_color = Color(0.5, 0.5, 0.52)
-	mat_rock.roughness = 0.95
 
 	# 环境风声（循环）
 	var amb := AudioStreamPlayer.new()
@@ -83,7 +70,7 @@ func _ready() -> void:
 	amb.play()
 
 	if not skip_select:
-		_show_species_select()
+		_show_map_select()
 	else:
 		skip_select = false
 		_continue_game()
@@ -95,6 +82,17 @@ func _show_species_select() -> void:
 	species_select.selected.connect(_on_species_selected)
 
 
+func _show_map_select() -> void:
+	var ms: MapSelect = MapSelectScene.instantiate() as MapSelect
+	dynamic.add_child(ms)
+	ms.selected.connect(_on_map_selected)
+
+
+func _on_map_selected(map_id: String) -> void:
+	_map_def = Maps.by_id(map_id)
+	_show_species_select()
+
+
 func _on_species_selected(species_id: String, is_continue: bool) -> void:
 	if species_select != null:
 		species_select.queue_free()
@@ -104,6 +102,7 @@ func _on_species_selected(species_id: String, is_continue: bool) -> void:
 
 func _continue_game() -> void:
 	var d: Dictionary = SaveManager.load_save()
+	_map_def = Maps.by_id(d.get("map_id", "forest"))
 	var sid: String = d.get("species_id", "raptor")
 	_start_game(sid, true)
 
@@ -120,6 +119,7 @@ func _start_game(species_id: String, is_continue: bool) -> void:
 		d["species_id"] = species_id
 		d["growth_stage"] = 0
 		d["generation"] = 1
+		d["map_id"] = _map_def.id
 		SaveManager.write_save(d)
 		gen = 1
 
@@ -127,9 +127,10 @@ func _start_game(species_id: String, is_continue: bool) -> void:
 	survival_time = 0.0
 	is_over = false
 
+	_spawn_terrain(_map_def)
 	_spawn_water()
 	_spawn_foliage()
-	_spawn_decor()
+	_spawn_nature()
 	_spawn_resource_points()
 	_spawn_hud()
 	_spawn_player(species_id, stage, gen)
@@ -141,102 +142,99 @@ func _start_game(species_id: String, is_continue: bool) -> void:
 
 
 # ================= 生成 =================
+## 生成地形网格并应用地图的天空/雾基调
+func _spawn_terrain(def: Maps.MapDef) -> void:
+	terrain = TerrainGenerator.new()
+	terrain.setup(def)
+	terrain.name = "Terrain"
+	dynamic.add_child(terrain)
+	_apply_map_atmosphere(def)
+
+
+## 用地图预设里的天空/雾/环境光基调初始化 WorldEnvironment
+func _apply_map_atmosphere(def: Maps.MapDef) -> void:
+	if world_env == null or world_env.environment == null:
+		return
+	var env: Environment = world_env.environment
+	env.fog_enabled = true
+	env.fog_mode = Environment.FOG_MODE_DEPTH
+	env.fog_density = def.fog_density
+	env.fog_light_color = def.fog_color
+
+
 func _spawn_water() -> void:
 	var radii := [LAKE_RADIUS, 12.0, 10.0]
-	for i in WATER_POINTS.size():
+	for i in _map_def.water_points.size():
+		var wp := _map_def.water_points[i] as Vector3
 		var w: WaterSource = WaterScene.instantiate() as WaterSource
-		w.global_position = WATER_POINTS[i]
+		w.global_position = Vector3(wp.x, _map_def.water_level, wp.z)
 		w.radius = radii[i] if i < radii.size() else 10.0
 		dynamic.add_child(w)
 
 
 func _spawn_foliage() -> void:
 	var fs: FoliageSpawner = FoliageSpawnerScene.instantiate() as FoliageSpawner
+	fs.terrain = terrain
+	fs.plant_slugs = _map_def.plant_models
+	fs.plant_count = _map_def.plant_count
 	dynamic.add_child(fs)
 
 
 func _spawn_resource_points() -> void:
-	# 巢穴与矿物盐散布在地图各处（避开水源与出生点）
+	# 巢穴与矿物盐散布在地图各处（避开水源，按地形高度放置）
 	var nests := [Vector3(45.0, 0.0, 50.0), Vector3(-60.0, 0.0, 30.0), Vector3(20.0, 0.0, -70.0)]
 	var licks := [Vector3(-30.0, 0.0, -40.0), Vector3(80.0, 0.0, 20.0), Vector3(-90.0, 0.0, -30.0)]
 	for pos in nests:
+		if terrain != null and terrain.is_under_water(pos.x, pos.z):
+			continue
 		var rp: ResourcePoint = ResourcePointScene.instantiate() as ResourcePoint
 		rp.point_type = ResourcePoint.Type.NEST
-		rp.global_position = pos
+		var y: float = terrain.get_height(pos.x, pos.z) if terrain != null else 0.0
+		rp.global_position = Vector3(pos.x, y, pos.z)
 		dynamic.add_child(rp)
 	for pos in licks:
+		if terrain != null and terrain.is_under_water(pos.x, pos.z):
+			continue
 		var rp: ResourcePoint = ResourcePointScene.instantiate() as ResourcePoint
 		rp.point_type = ResourcePoint.Type.LICK
-		rp.global_position = pos
+		var y: float = terrain.get_height(pos.x, pos.z) if terrain != null else 0.0
+		rp.global_position = Vector3(pos.x, y, pos.z)
 		dynamic.add_child(rp)
 
 
-func _spawn_decor() -> void:
+## 在地形上随机撒自然模型（树木 + 岩石），替代旧的 CSG 装饰
+func _spawn_nature() -> void:
+	if terrain == null:
+		return
+	var half := terrain.half_extent - 8.0
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
-	for i in 34:
-		var pos: Vector3 = _random_ground_pos()
-		if _too_close_to_water(pos, 4.0) or pos.distance_to(PLAYER_SPAWN) < 12.0:
+	# 树木
+	for i in _map_def.tree_count:
+		var x: float = rng.randf_range(-half, half)
+		var z: float = rng.randf_range(-half, half)
+		if terrain.is_under_water(x, z):
 			continue
-		dynamic.add_child(_make_tree(pos))
-	for i in 22:
-		var pos: Vector3 = _random_ground_pos()
-		if _too_close_to_water(pos, 4.0) or pos.distance_to(PLAYER_SPAWN) < 10.0:
+		if abs(x) < 12.0 and abs(z) < 12.0:
+			continue  # 出生点附近留空
+		var slug: String = _map_def.tree_models[rng.randi() % _map_def.tree_models.size()]
+		var s: float = rng.randf_range(0.8, 1.3)
+		var p := NatureProp.create(slug, s, 0.0)
+		p.global_position = Vector3(x, terrain.get_height(x, z), z)
+		dynamic.add_child(p)
+	# 岩石
+	for i in _map_def.rock_count:
+		var x: float = rng.randf_range(-half, half)
+		var z: float = rng.randf_range(-half, half)
+		if terrain.is_under_water(x, z):
 			continue
-		dynamic.add_child(_make_rock(pos))
-	# 树林集群：3 处聚拢的树群，丰富地貌
-	for c in 3:
-		var center: Vector3 = _random_ground_pos()
-		if _too_close_to_water(center, 8.0):
+		if abs(x) < 10.0 and abs(z) < 10.0:
 			continue
-		for k in range(rng.randi_range(5, 8)):
-			var off := Vector3(rng.randf_range(-9, 9), 0, rng.randf_range(-9, 9))
-			var p: Vector3 = center + off
-			if _too_close_to_water(p, 4.0):
-				continue
-			dynamic.add_child(_make_tree(p))
-
-
-## 是否过于靠近任一水源（避免装饰/植物长在水里）
-func _too_close_to_water(pos: Vector3, margin: float) -> bool:
-	var radii := [LAKE_RADIUS, 12.0, 10.0]
-	for i in WATER_POINTS.size():
-		var r: float = radii[i] if i < radii.size() else 10.0
-		if pos.distance_to(WATER_POINTS[i]) < r + margin:
-			return true
-	return false
-
-
-func _make_tree(pos: Vector3) -> Node3D:
-	var n := Node3D.new()
-	n.position = pos
-	var trunk := CSGCylinder3D.new()
-	trunk.radius = 0.4
-	trunk.height = 3.0
-	trunk.position = Vector3(0, 1.5, 0)
-	trunk.use_collision = true
-	trunk.material = mat_trunk
-	n.add_child(trunk)
-	var top := CSGSphere3D.new()
-	top.radius = 1.4
-	top.position = Vector3(0, 3.5, 0)
-	top.use_collision = true
-	top.material = mat_foliage
-	n.add_child(top)
-	return n
-
-
-func _make_rock(pos: Vector3) -> Node3D:
-	var n := Node3D.new()
-	n.position = pos
-	var r := CSGBox3D.new()
-	var s: float = randf_range(1.0, 1.8)
-	r.size = Vector3(s, s * 0.7, s * 1.1)
-	r.position = Vector3(0, 0.5, 0)
-	r.use_collision = true
-	r.material = mat_rock
-	n.add_child(r)
-	return n
+		var slug: String = _map_def.rock_models[rng.randi() % _map_def.rock_models.size()]
+		var s: float = rng.randf_range(0.6, 1.8)
+		var p := NatureProp.create(slug, s, 0.0)
+		p.global_position = Vector3(x, terrain.get_height(x, z), z)
+		dynamic.add_child(p)
 
 
 func _spawn_player(species_id: String, stage: int, gen: int) -> void:
@@ -244,7 +242,7 @@ func _spawn_player(species_id: String, stage: int, gen: int) -> void:
 	player.species_id = species_id
 	player.start_growth_stage = stage
 	player.generation = gen
-	player.map_radius = MAP_RADIUS
+	player.map_radius = _map_radius()
 	# 先连信号，再加树（_ready 内会发出初始信号）
 	player.health_changed.connect(_on_player_health_changed)
 	player.hunger_changed.connect(_on_player_hunger_changed)
@@ -255,7 +253,8 @@ func _spawn_player(species_id: String, stage: int, gen: int) -> void:
 	player.hint.connect(_on_player_hint)
 	player.died.connect(_on_player_died)
 	dynamic.add_child(player)
-	player.global_position = PLAYER_SPAWN
+	var py: float = terrain.get_height(PLAYER_SPAWN.x, PLAYER_SPAWN.z) if terrain != null else PLAYER_SPAWN.y
+	player.global_position = Vector3(PLAYER_SPAWN.x, py + 0.2, PLAYER_SPAWN.z)
 
 
 func _spawn_ecosystem(player_stage: int) -> void:
@@ -270,10 +269,11 @@ func _spawn_boss() -> void:
 	var ai: AIDino = AIScene.instantiate() as AIDino
 	ai.species_id = "trex"
 	ai.start_growth_stage = DinoSpecies.MAX_STAGE
-	ai.map_radius = MAP_RADIUS
+	ai.map_radius = _map_radius()
 	var ang: float = randf() * TAU
-	var pos: Vector3 = Vector3(sin(ang), 0.0, cos(ang)) * (MAP_RADIUS - 20.0)
-	ai.global_position = Vector3(pos.x, 1.5, pos.z)
+	var pos: Vector3 = Vector3(sin(ang), 0.0, cos(ang)) * (_map_radius() - 20.0)
+	var by: float = terrain.get_height(pos.x, pos.z) if terrain != null else 1.5
+	ai.global_position = Vector3(pos.x, by + 0.2, pos.z)
 	ai.died.connect(_on_ai_died)
 	dynamic.add_child(ai)
 	ai_dinos.append(ai)
@@ -307,13 +307,16 @@ func _spawn_ai(species_id: String, stage: int) -> void:
 	var ai: AIDino = AIScene.instantiate() as AIDino
 	ai.species_id = species_id
 	ai.start_growth_stage = stage
-	ai.map_radius = MAP_RADIUS
-	var pos: Vector3 = _random_ground_pos()
+	ai.map_radius = _map_radius()
+	var angle: float = randf() * TAU
+	var dist: float = randf() * (_map_radius() - 6.0)
+	var pos: Vector3 = Vector3(sin(angle) * dist, 0.0, cos(angle) * dist)
 	# 不要紧贴玩家出生点
 	if pos.distance_to(PLAYER_SPAWN) < 14.0:
 		pos = pos.normalized() * 30.0 if pos.length() > 0.1 else Vector3(30, 0, 0)
 	dynamic.add_child(ai)
-	ai.global_position = Vector3(pos.x, 1.5, pos.z)
+	var ay: float = terrain.get_height(pos.x, pos.z) if terrain != null else 1.5
+	ai.global_position = Vector3(pos.x, ay + 0.2, pos.z)
 	ai.died.connect(_on_ai_died)
 	ai_dinos.append(ai)
 
@@ -438,10 +441,6 @@ func _process(delta: float) -> void:
 
 
 # ================= 工具 =================
-func _random_ground_pos() -> Vector3:
-	var angle: float = randf() * TAU
-	var dist: float = randf() * (MAP_RADIUS - 6.0)
-	return Vector3(sin(angle) * dist, 0.0, cos(angle) * dist)
 
 
 # ================= 昼夜循环 =================
@@ -449,9 +448,19 @@ func _apply_day_night() -> void:
 	var h: float = sin(day_t * TAU)                 # -1 午夜 .. 1 正午
 	var day: float = clampf(h, 0.0, 1.0)            # 0 夜 .. 1 昼
 	var twilight: float = clampf(1.0 - abs(h) * 3.0, 0.0, 1.0)  # 近地平线辉光
+	# 地图基调（日间基色），未选地图时回退默认
+	var day_top := Color(0.35, 0.6, 0.85)
+	var day_horizon := Color(0.7, 0.82, 0.9)
+	var sun_day := Color(1.0, 0.98, 0.9)
+	var fog_base := Color(0.8, 0.85, 0.8)
+	if _map_def != null:
+		day_top = _map_def.sky_top
+		day_horizon = _map_def.sky_horizon
+		sun_day = _map_def.sun_color
+		fog_base = _map_def.fog_color
 	if sun_light != null:
 		sun_light.light_energy = lerpf(0.15, 1.25, day)
-		var day_col := Color(1.0, 0.98, 0.9)
+		var day_col := sun_day
 		var dusk_col := Color(1.0, 0.55, 0.3)
 		var night_col := Color(0.4, 0.5, 0.8)
 		var col := night_col.lerp(day_col, day)
@@ -459,11 +468,14 @@ func _apply_day_night() -> void:
 		sun_light.light_color = col
 	if world_env != null and world_env.environment != null:
 		var env: Environment = world_env.environment
-		var top := Color(0.1, 0.15, 0.35).lerp(Color(0.35, 0.6, 0.85), day)
-		var hor := Color(0.2, 0.25, 0.4).lerp(Color(0.7, 0.8, 0.92), day)
+		var top := Color(0.1, 0.15, 0.35).lerp(day_top, day)
+		var hor := Color(0.2, 0.25, 0.4).lerp(day_horizon, day)
 		hor = hor.lerp(Color(1.0, 0.5, 0.3), twilight * 0.5)
 		if env.sky != null and env.sky.sky_material is ProceduralSkyMaterial:
 			var sm := env.sky.sky_material as ProceduralSkyMaterial
 			sm.sky_top_color = top
 			sm.sky_horizon_color = hor
 		env.ambient_light_energy = lerpf(0.25, 0.7, day)
+		# 雾色随昼夜微调（夜间偏暗）
+		if env.fog_enabled:
+			env.fog_light_color = fog_base.lerp(Color(0.18, 0.22, 0.32), (1.0 - day) * 0.5)
