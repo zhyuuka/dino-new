@@ -9,7 +9,7 @@
 - **引擎**：Godot 4.4.1 stable，GDScript（强类型）
 - **Godot 可执行文件**：`/workspace/tools/godot`
 - **项目目录**：`/workspace/dino-world`
-- **目标平台**：Android（arm64-v8a），横屏锁定（`project.godot` 已设 `window/handheld/orientation=1`）
+- **目标平台**：Android（arm64-v8a），横屏锁定（`project.godot` 设 `window/handheld/orientation=0`；Android manifest `screenOrientation=0`=横屏）
 - **仓库**：GitHub 公开仓库 `https://github.com/zhyuuka/dino-new`（本地 remote 名 `private`，token 已从 remote URL 清除，push 时需重新嵌入或走 gh 凭证）
 
 ## 二、当前已完成的功能
@@ -432,7 +432,8 @@ git remote set-url private "https://github.com/zhyuuka/dino-new.git"
 
 3. **`mouse_filter=0`（pass）让帮助按钮可点击**：已修复。TouchControls 根 Control 的 mouse_filter 从 2 改成了 0。这里面的逻辑：TouchControls（CanvasLayer）画在 HUD 之上，根 Control 全屏覆盖。若 mouse_filter=2（stop），HUD 里的"开始狩猎"按钮永远收不到点击。改成 0 后穿透。
 
-4. **横屏已锁定**：`project.godot` 设了 `window/handheld/orientation=1`（landscape），APK manifest 也写了 screenOrientation=0x1。**不要改**。
+4. **横屏已锁定**：`project.godot` 设了 `window/handheld/orientation=0`（= Android manifest `screenOrientation="0"` = `SCREEN_ORIENTATION_LANDSCAPE` 横屏）。**不要改**。
+   ⚠️ 注意 Godot 4 把 `window/handheld/orientation` 的枚举值**原样写进** Android manifest；而 Android 的 `screenOrientation` 编号里 `0`=横屏、`1`=竖屏（与 Godot 3 的 `1`=横屏相反）。所以这里用 `0` 才是横屏——曾误写成 `1` 导致游戏被锁成竖屏、触屏 UI 因横向裁切而点不到（相机切换"没生效"即此症状）。
 
 5. **headless 16s 验证**：运行 `godot --headless --quit-after 16` 会真正 spawn 世界并跑几十帧（AI 生成/生态维护/小地图/昼夜），足以触发绝大多数运行时错误。
 
