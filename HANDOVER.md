@@ -10,7 +10,7 @@
 - **Godot 可执行文件**：`/workspace/tools/godot`
 - **项目目录**：`/workspace/dino-world`
 - **目标平台**：Android（arm64-v8a），横屏锁定（`project.godot` 已设 `window/handheld/orientation=1`）
-- **仓库**：GitHub 私人仓库 `https://github.com/zhyuuka/dino-world-private`（本地 remote 名 `private`，token 已从 remote URL 清除，push 时需重新嵌入或走 gh 凭证）
+- **仓库**：GitHub 公开仓库 `https://github.com/zhyuuka/dino-new`（本地 remote 名 `private`，token 已从 remote URL 清除，push 时需重新嵌入或走 gh 凭证）
 
 ## 二、当前已完成的功能
 
@@ -335,9 +335,9 @@ cd /workspace/dino-world
 git add -A
 git commit -m "B阶段: 完成地形/多地图/自然模型散布全流程 + APK 导出"
 # 推送需要 token（嵌入 URL 再清掉）
-git remote set-url private "https://ghp_你的TOKEN@github.com/zhyuuka/dino-world-private.git"
+git remote set-url private "https://ghp_你的TOKEN@github.com/zhyuuka/dino-new.git"
 git push private main
-git remote set-url private "https://github.com/zhyuuka/dino-world-private.git"
+git remote set-url private "https://github.com/zhyuuka/dino-new.git"
 ```
 
 ---
@@ -418,9 +418,9 @@ git remote set-url private "https://github.com/zhyuuka/dino-world-private.git"
 
 ### Git
 - 本地仓库：`/workspace/dino-world`
-- 私人仓库（private remote）：`https://github.com/zhyuuka/dino-world-private.git`
-- 公开仓库（origin remote）：`https://github.com/zhyuuka/dino-world.git`
-- 当前分支：`main`，最新提交 `742a65b`（WIP）
+- 当前远程（private）：`https://github.com/zhyuuka/dino-new.git`（公开仓库，原名 dino-world-private 已改名）
+- 旧远程（origin）：`https://github.com/zhyuuka/dino-world.git`
+- 当前分支：`main`，最新提交 `48d766e`（HANDOVER.md）
 
 ---
 
