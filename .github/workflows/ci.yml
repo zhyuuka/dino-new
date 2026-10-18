@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  headless-tests:
+    runs-on: ubuntu-latest
+    steps:
+      # 不开启 LFS：仓库仅 *.bin（gltf 网格缓冲）走 Git LFS，跳过后 gltf 无法导入，
+      # 但 CI 只需脚本与全局类缓存，无需模型资产，跳过以加速
+      - name: Checkout（跳过 LFS 大资产）
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+
+      # 缓存 Godot 引擎二进制；key 含版本号，升级引擎版本时自动失效重建
+      - name: Cache Godot
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          path: ./godot
+          key: godot-4.4.1-stable-linux-x86_64
+
+      - name: Download Godot 4.4.1-stable
+        if: steps.cache-godot.outputs.cache-hit != 'true'
+        run: |
+          curl -L --fail -o /tmp/godot.zip \
+            https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_linux.x86_64.zip
+          unzip -o /tmp/godot.zip -d /tmp/godot_extract
+          mkdir -p ./godot
+          mv /tmp/godot_extract/Godot_v4.4.1-stable_linux.x86_64 ./godot/
+
+      # 缓存恢复不保证可执行位，这里统一补一次 chmod（幂等）
+      - name: Ensure Godot executable
+        run: chmod +x ./godot/Godot_v4.4.1-stable_linux.x86_64
+
+      # LFS 的 *.bin 缺席导致 gltf 导入报错，但足以生成 .godot 全局类缓存
+      # （class_name 静态类解析依赖它），故允许该步失败继续
+      - name: Import project
+        continue-on-error: true
+        run: timeout 600 ./godot/Godot_v4.4.1-stable_linux.x86_64 --headless --editor --quit --path .
+
+      - name: Run tests
+        run: ./godot/Godot_v4.4.1-stable_linux.x86_64 --headless -s res://tests/run_tests.gd --path .

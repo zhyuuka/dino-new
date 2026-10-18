@@ -115,3 +115,8 @@ renderer/rendering_method.mobile="mobile"
 environment/defaults/default_clear_color=Color(0.45, 0.65, 0.85, 1)
 anti_aliasing/quality/msaa_3d=2
 textures/vram_compression/import_etc2_astc=true
+
+[autoload]
+
+GameState="*res://scripts/core/GameState.gd"
+AudioManager="*res://scripts/core/AudioManager.gd"

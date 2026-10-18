@@ -153,6 +153,7 @@ func _ready() -> void:
 	add_to_group(Groups.PLAYER)
 	sfx = AudioStreamPlayer.new()
 	sfx.volume_db = -4.0
+	sfx.bus = AudioManager.BUS_SFX
 	add_child(sfx)
 	species = DinoSpecies.by_id(species_id)
 	if species == null:
@@ -408,9 +409,9 @@ func _pitch_limits() -> Vector2:
 	return Vector2(CAM_PITCH_MIN, CAM_PITCH_MAX)
 
 
-## 触屏视角拖动增量（由 TouchControls.LookZone 调用）
+## 触屏视角拖动增量（由 TouchControls.LookZone 调用），乘以用户灵敏度设置
 func add_look_delta(d: Vector2) -> void:
-	_look_delta += d
+	_look_delta += d * float(GameState.get_setting("look_sensitivity", 1.0))
 
 
 # ================= 咬击 =================

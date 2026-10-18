@@ -28,6 +28,8 @@ signal menu_pressed
 
 var _hint_tween: Tween = null
 var _last_hint: String = ""
+var _pause_menu: PauseMenu
+var _is_dead: bool = false
 
 
 func _ready() -> void:
@@ -41,7 +43,11 @@ func _ready() -> void:
 	hint_label.modulate.a = 0.0
 	death_panel.visible = false
 	death_label.visible = false
-	menu_button.pressed.connect(func(): menu_pressed.emit())
+	# 暂停菜单：HUD 持有并实例化；其回主菜单请求转发给既有的 menu_pressed（Main 侧零改动）
+	_pause_menu = PauseMenu.new()
+	_pause_menu.exit_to_menu.connect(func(): menu_pressed.emit())
+	add_child(_pause_menu)
+	menu_button.pressed.connect(_on_menu_button)
 	help_panel.visible = false
 	help_button.pressed.connect(func(): hide_help())
 
@@ -51,6 +57,14 @@ func _color_bar(bar: ProgressBar, col: Color) -> void:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = col
 	bar.add_theme_stylebox_override("fill", sb)
+
+
+## 菜单按钮：存活时打开暂停菜单；死亡屏期间保持原行为直接回主菜单（玩家已死不该有暂停）
+func _on_menu_button() -> void:
+	if _is_dead:
+		menu_pressed.emit()
+	else:
+		_pause_menu.open()
 
 
 func set_health(c: int, m: int) -> void:
@@ -120,6 +134,7 @@ func hide_hint() -> void:
 
 
 func show_death(text: String) -> void:
+	_is_dead = true
 	death_label.text = text
 	death_panel.visible = true
 	death_label.visible = true

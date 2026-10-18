@@ -488,3 +488,29 @@ Step 6（最终导出）      → APK 构建 → 签名校验 → 提交 + push
 
 **终验补充修复（本次交叉验证新发现）**：
 - `Main._process` 计分刷新处 `hud.set_score` 增加 `hud != null` 防护——选图/选种界面期间 hud 尚未生成，原代码每 0.5 秒会刷一次 null instance 运行时错误。涉及 `scripts/game/Main.gd`。
+
+---
+
+## 十、P2 工程化记录（2026-10-18）
+
+> P2 终验子会话追加。四块改动均已完成交叉终验（逐句对照原 Main.gd 529 行版本），见下方"终验修复"。
+
+**四块改动**：
+
+1. **Autoload 架构**：新增全局设置中心与音频总线两个 autoload 单例——GameState 负责 user://settings.json 的加载校验（逐键类型+范围，损坏/越界一律回退默认）与原子写；AudioManager 负责幂等创建 SFX/Ambient 总线（send 到 Master）并按设置应用音量（linear≤0.0001 压到 -80dB，避免 linear_to_db(0) 产生 -inf）。注册顺序 GameState 在前，AudioManager._ready 依赖此顺序读 `GameState.settings`。
+   新文件：`scripts/core/GameState.gd`、`scripts/core/AudioManager.gd`；改动：`project.godot`（末尾 [autoload] 区段，`*` 单例前缀）。
+2. **Main 拆分**：Main.gd 529→316 行，瘦身为纯编排器（流程/信号接线/存档），按职责拆出四个子系统——DayNightCycle（昼夜循环，day_t 跨死亡重开连续）、ScoreKeeper（计分与 0.5s 刷分节奏）、WorldBuilder（世界资产构建，纯参数化工具）、EcosystemDirector（AI 花名册/种群补员/Boss 重生，经 ai_died/boss_spawned 信号回报 Main 生成尸体与横幅）。调用时序与 reset/reset_all 使用场景（_start_game 用 reset 保留原"不清刷分计时"怪癖；_restart_run 用 reset_all + clear_all）与原逻辑逐句等价。
+   新文件：`scripts/game/DayNightCycle.gd`、`scripts/game/ScoreKeeper.gd`、`scripts/game/WorldBuilder.gd`、`scripts/game/EcosystemDirector.gd`。
+3. **暂停+设置**：HUD 内嵌 PauseMenu（CanvasLayer，process_mode WHEN_PAUSED，layer 10 高于 HUD），打开时暂停整棵树、关闭恢复；菜单按钮存活时开暂停、死亡屏期间保持原"直接回主菜单"行为（HUD._is_dead 分支）；回主菜单先 unpause 再 reload；死亡重开重建 HUD 时旧 PauseMenu 随旧 HUD 释放，无悬挂连接。SettingsPanel 提供主音量/音效/环境音/视角灵敏度四滑条，变化即经 GameState 落盘并经 AudioManager.apply_settings 实时生效；PlayerDino 的 sfx 挂 SFX 总线、触屏视角增量乘以灵敏度（LookControl/TouchControls 的 look 增量统一走 add_look_delta，覆盖 Android 全部视角来源）。
+   新文件：`scripts/ui/PauseMenu.gd`、`scripts/ui/SettingsPanel.gd`；改动：`scripts/ui/HUD.gd`、`scripts/player/PlayerDino.gd`。
+4. **测试与 CI**：tests/run_tests.gd（extends SceneTree，入口 `_initialize()`——已查证 4.4 源码 `SceneTree::initialize()`→`MainLoop::initialize()`→`GDVIRTUAL_CALL(_initialize)` 成立；47 断言覆盖 Groups/Maps/DinoSpecies/SaveManager 纯数据层，失败 `quit(1)`）+ GitHub Actions headless 工作流（下载 4.4.1-stable Linux 二进制并缓存，`--editor --quit` 生成全局类缓存后跑 `-s` 测试）。
+   新文件：`tests/run_tests.gd`、`.github/workflows/ci.yml`。
+   ⚠️ **测试与 CI 未经本地运行验证，首次 push 后以 GitHub Actions 首跑结果为准**（import 步骤已设 continue-on-error + timeout 600 兜底 LFS 缺失的导入报错）。
+
+**终验修复（本次交叉验证新发现，均已修复）**：
+- `Main._ready` 中三个 Node 型子系统（day_night/world_builder/director）原先只 `.new()` 不 `add_child`——`reload_current_scene()` 释放 Main 时它们成为孤儿节点泄漏（Node 非引用计数）。现挂到 Main 下随场景释放（均无自带回调，零副作用）。涉及 `scripts/game/Main.gd`。
+- `Main._ready` 环境音总线由裸字符串 `"Ambient"` 改为 `AudioManager.BUS_AMBIENT` 常量，与 PlayerDino 的 `AudioManager.BUS_SFX` 用法统一。涉及 `scripts/game/Main.gd`。
+- `tests/run_tests.gd` 头注释"-s 模式不加载 autoload"失实（Godot 4.4 `main.cpp` 中 `-s` 且主循环为 SceneTree 的 game 运行仍会加载 autoload），已修正；被测类均为 class_name 静态类，不受影响。
+- `ci.yml` 注释"约 1GB 美术资产走 Git LFS"失实——`.gitattributes` 仅 `*.bin` 走 LFS，已修正；Godot 4.4.1-stable 的 `Godot_v4.4.1-stable_linux.x86_64.zip` 下载 URL 已实际请求验证（302→200）。
+
+**终验通过项备忘**：Main 拆分全链路（_start_game/_continue_game/_restart_run/_on_player_died/_on_menu）、director 调用时序（setup(null)→set_terrain→spawn_roster→maintain_population→handle_ai_death→clear_all）、Callable `_map_radius` 0 参签名、day_t 连续性、暂停链路（WHEN_PAUSED 经 CanvasLayer→Control 子树继承生效、unpause 先于 reload）、`_restart_run` 无悬挂连接、AudioServer API 用法（add_bus/set_bus_name/set_bus_send/linear_to_db）、测试删除 user://save.json 仅发生在测试环境（CI 全新环境无真机存档风险；本地跑测试会覆盖本机存档，属已知设计）均逐项核对通过。
