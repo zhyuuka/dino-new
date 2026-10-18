@@ -13,6 +13,10 @@ var _map_def: Maps.MapDef = null
 ## 一天进度 0..1（0.3 = 清晨起步）
 var day_t: float = 0.3
 
+## 风暴状态（随机事件系统控制）：生效期雾密度 ×3、太阳能量 ×0.6
+var _storm_on: bool = false
+var _storm_fog_base: float = 0.006  # 风暴开始时记录的雾密度基准（取自 _map_def.fog_density）
+
 
 ## 注入场景中的太阳光与世界环境节点（Main._ready 时调用）
 func setup(sun: DirectionalLight3D, env: WorldEnvironment) -> void:
@@ -23,6 +27,19 @@ func setup(sun: DirectionalLight3D, env: WorldEnvironment) -> void:
 ## 选图 / 读档后注入地图的天空与雾基调（未注入时使用默认基调）
 func set_map_def(def: Maps.MapDef) -> void:
 	_map_def = def
+
+
+## 风暴开关（随机事件系统调用）：开启时记录雾密度基准，关闭时恢复原密度。
+## 太阳能量的 ×0.6 与雾密度 ×3 统一在 _apply_day_night 末尾叠加，
+## 逐帧重算后再乘系数，不会被昼夜公式的每帧写入覆盖。
+func set_storm(on: bool) -> void:
+	if on and not _storm_on:
+		_storm_fog_base = _map_def.fog_density if _map_def != null else 0.006
+	var was_on: bool = _storm_on
+	_storm_on = on
+	# 仅在"开 → 关"的转换沿恢复基准密度：从未开过风暴时误调 set_storm(false) 不再误写雾密度
+	if was_on and not _storm_on and world_env != null and world_env.environment != null:
+		world_env.environment.fog_density = _storm_fog_base  # 结束恢复基准密度
 
 
 ## 每帧推进一天进度并应用光照变化
@@ -66,3 +83,9 @@ func _apply_day_night() -> void:
 		# 雾色随昼夜微调（夜间偏暗）
 		if env.fog_enabled:
 			env.fog_light_color = fog_base.lerp(Color(0.18, 0.22, 0.32), (1.0 - day) * 0.5)
+	# 风暴系数（纯乘法叠加，不改变既有昼夜公式数值）：雾密度 ×3、太阳能量 ×0.6
+	if _storm_on:
+		if world_env != null and world_env.environment != null:
+			world_env.environment.fog_density = _storm_fog_base * 3.0
+		if sun_light != null:
+			sun_light.light_energy *= 0.6

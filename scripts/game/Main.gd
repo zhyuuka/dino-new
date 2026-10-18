@@ -37,11 +37,13 @@ var is_over: bool = false
 var sun_light: DirectionalLight3D
 var world_env: WorldEnvironment
 
-# 子系统：昼夜 / 计分 / 世界构建 / AI 生态
+# 子系统：昼夜 / 计分 / 世界构建 / AI 生态 / 随机事件
 var day_night: DayNightCycle
 var score_keeper: ScoreKeeper
 var world_builder: WorldBuilder
 var director: EcosystemDirector
+var foliage_spawner: FoliageSpawner
+var random_events: RandomEvents
 
 
 # 地图半径由地形半幅决定（无地形时回退 135）
@@ -100,6 +102,7 @@ func _show_map_select() -> void:
 func _on_map_selected(map_id: String) -> void:
 	_map_def = Maps.by_id(map_id)
 	day_night.set_map_def(_map_def)
+	director.set_map_def(_map_def)
 	_show_species_select()
 
 
@@ -114,6 +117,7 @@ func _continue_game() -> void:
 	var d: Dictionary = SaveManager.load_save()
 	_map_def = Maps.by_id(d.get("map_id", Maps.DEFAULT_MAP_ID))
 	day_night.set_map_def(_map_def)
+	director.set_map_def(_map_def)
 	var sid: String = d.get("species_id", DinoSpecies.ID_RAPTOR)
 	_start_game(sid, true)
 
@@ -141,13 +145,14 @@ func _start_game(species_id: String, is_continue: bool) -> void:
 	terrain = world_builder.spawn_terrain(dynamic, _map_def, world_env)
 	director.set_terrain(terrain)
 	world_builder.spawn_water(dynamic, _map_def)
-	world_builder.spawn_foliage(dynamic, _map_def, terrain)
+	foliage_spawner = world_builder.spawn_foliage(dynamic, _map_def, terrain)
 	world_builder.spawn_nature(dynamic, _map_def, terrain)
 	world_builder.spawn_resource_points(dynamic, terrain)
-	# 运行期角色与 UI（顺序：HUD → 玩家 → 生态 → 触屏）
+	# 运行期角色与 UI（顺序：HUD → 玩家 → 生态 → 随机事件 → 触屏）
 	_spawn_hud()
 	_spawn_player(species_id, stage, gen)
 	director.spawn_roster(stage)
+	_spawn_random_events()
 	_spawn_touch_controls()
 
 	hud.show_hint("管理好饥饿/口渴/体力。靠近湖泊按 E 或饮水键喝水，吃对的食物会成长。")
@@ -179,6 +184,17 @@ func _spawn_hud() -> void:
 	hud = HUDScene.instantiate() as HUD
 	dynamic.add_child(hud)
 	hud.menu_pressed.connect(_on_menu)
+
+
+## 创建随机事件子系统并注入依赖、接线横幅信号（开局 / 死亡重开各调用一次）
+func _spawn_random_events() -> void:
+	random_events = RandomEvents.new()
+	random_events.director = director
+	random_events.day_night = day_night
+	random_events.foliage_spawner = foliage_spawner
+	random_events.event_started.connect(hud.show_banner)
+	random_events.event_ended.connect(hud.show_banner)
+	add_child(random_events)
 
 
 func _spawn_touch_controls() -> void:
@@ -262,6 +278,10 @@ func _restart_run() -> void:
 	if touch_controls != null:
 		touch_controls.queue_free()
 		touch_controls = null
+	# 随机事件旧实例释放（_exit_tree 会回滚未结束的风暴/丰饶期效果）
+	if random_events != null:
+		random_events.queue_free()
+		random_events = null
 	# 场上尸体统一清掉（组常量见 Groups.CORPSE）
 	for corpse in get_tree().get_nodes_in_group(Groups.CORPSE):
 		corpse.queue_free()
@@ -282,6 +302,7 @@ func _restart_run() -> void:
 	_spawn_hud()
 	_spawn_player(sid, stage, gen)
 	director.spawn_roster(stage)
+	_spawn_random_events()
 	_spawn_touch_controls()
 	hud.show_hint("第 %d 代开始：成长已保留，地形与植被延续，继续变强！" % gen)
 

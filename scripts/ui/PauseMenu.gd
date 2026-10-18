@@ -85,6 +85,20 @@ func _build_ui() -> void:
 	vbox.add_child(_make_button("设置", _show_settings))
 	vbox.add_child(_make_button("回到主菜单", _on_exit_pressed))
 
+	# 主层底部：小字版本号（随主层显隐；读取项目设置 application/config/version）
+	var version_label := Label.new()
+	version_label.text = "v%s" % ProjectSettings.get_setting("application/config/version", "dev")
+	version_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	version_label.anchor_left = 0.0
+	version_label.anchor_top = 1.0
+	version_label.anchor_right = 1.0
+	version_label.anchor_bottom = 1.0
+	version_label.offset_top = -40.0
+	version_label.offset_bottom = -12.0
+	version_label.add_theme_font_size_override("font_size", 14)
+	version_label.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85, 0.5))
+	_main_root.add_child(version_label)
+
 	# 设置子面板（初始隐藏，返回时切回主层；随本层 WHEN_PAUSED 一同在暂停中可用）
 	_settings_panel = SettingsPanel.new()
 	_settings_panel.visible = false

@@ -30,6 +30,9 @@ class MapDef:
 	var fog_density: float = 0.006
 	var sun_color: Color = Color(1.0, 0.98, 0.9)
 	var heightmap_path: String = ""
+	## 地图专属加成物种：在基础 11 只花名册之外额外并入的物种 id 列表
+	## （由 EcosystemDirector._build_roster 末尾合并，用于强化各图生态基调）
+	var extra_roster: Array[String] = []
 
 
 static var _db: Array = []
@@ -72,6 +75,8 @@ static func _forest() -> MapDef:
 	d.sky_top = Color(0.35, 0.6, 0.85); d.sky_horizon = Color(0.72, 0.83, 0.92)
 	d.ambient = 0.55; d.fog_color = Color(0.8, 0.85, 0.82); d.fog_density = 0.006
 	d.sun_color = Color(1.0, 0.98, 0.9)
+	# 水草丰美的谷地：食草族群格外兴旺，食物链底层厚实
+	d.extra_roster = [DinoSpecies.ID_GALLI, DinoSpecies.ID_TRIKE]
 	return d
 
 
@@ -90,6 +95,8 @@ static func _snow() -> MapDef:
 	d.sky_top = Color(0.45, 0.6, 0.85); d.sky_horizon = Color(0.86, 0.9, 0.95)
 	d.ambient = 0.7; d.fog_color = Color(0.9, 0.93, 0.97); d.fog_density = 0.011
 	d.sun_color = Color(0.95, 0.97, 1.0)
+	# 寒冷雪原：厚甲抗寒的甲龙常驻，耐寒的似鸡龙小群游荡
+	d.extra_roster = [DinoSpecies.ID_ANKY, DinoSpecies.ID_GALLI]
 	return d
 
 
@@ -108,6 +115,8 @@ static func _waste() -> MapDef:
 	d.sky_top = Color(0.6, 0.55, 0.5); d.sky_horizon = Color(0.85, 0.7, 0.55)
 	d.ambient = 0.6; d.fog_color = Color(0.82, 0.66, 0.5); d.fog_density = 0.013
 	d.sun_color = Color(1.0, 0.9, 0.75)
+	# 开阔荒原：迅猛龙群在稀疏掩体间协同猎杀，疾驰的似鸡龙成群觅食
+	d.extra_roster = [DinoSpecies.ID_RAPTOR, DinoSpecies.ID_GALLI]
 	return d
 
 
@@ -127,4 +136,6 @@ static func _canyon() -> MapDef:
 	d.ambient = 0.6; d.fog_color = Color(0.85, 0.85, 0.88); d.fog_density = 0.009
 	d.sun_color = Color(1.0, 0.96, 0.88)
 	d.heightmap_path = "assets/terrain/heightmap_community.png"
+	# 险峻峡谷：顶级猎手的领地，食肉牛龙盘踞谷底，霸王龙偶尔巡猎（高难图加压）
+	d.extra_roster = [DinoSpecies.ID_CARNO, DinoSpecies.ID_TREX]
 	return d

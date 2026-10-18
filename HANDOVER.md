@@ -514,3 +514,27 @@ Step 6（最终导出）      → APK 构建 → 签名校验 → 提交 + push
 - `ci.yml` 注释"约 1GB 美术资产走 Git LFS"失实——`.gitattributes` 仅 `*.bin` 走 LFS，已修正；Godot 4.4.1-stable 的 `Godot_v4.4.1-stable_linux.x86_64.zip` 下载 URL 已实际请求验证（302→200）。
 
 **终验通过项备忘**：Main 拆分全链路（_start_game/_continue_game/_restart_run/_on_player_died/_on_menu）、director 调用时序（setup(null)→set_terrain→spawn_roster→maintain_population→handle_ai_death→clear_all）、Callable `_map_radius` 0 参签名、day_t 连续性、暂停链路（WHEN_PAUSED 经 CanvasLayer→Control 子树继承生效、unpause 先于 reload）、`_restart_run` 无悬挂连接、AudioServer API 用法（add_bus/set_bus_name/set_bus_send/linear_to_db）、测试删除 user://save.json 仅发生在测试环境（CI 全新环境无真机存档风险；本地跑测试会覆盖本机存档，属已知设计）均逐项核对通过。
+
+---
+
+## 十一、P3/P4 快速项记录（2026-10-18）
+
+> P3/P4 三路改动（A 路代理 AI 仇恨/攻击表现、B 路代理 地图物种+随机事件、C 路代理 版本/图标）已完成全量交叉终验，逐项核对 take_damage 全部 9 处调用点、事件状态机、风暴回滚链路、图标配置与代码风格。两处终验新发现已修复（见末尾）。
+
+**改动内容**：
+
+1. **AI 受击仇恨与反击（A 路）**：`AIDino` 新增 `_aggro_target/_aggro_timer`（受击 6 秒报复窗口）与 `_decide` 仇恨最优先分支——按体型规则（攻击者体型 ≤ 自己×0.9 参考 `_find_prey` 阈值风格）决定反击（转 HUNT 锁定攻击者）或逃跑（转 FLEE），超时/目标失效/死亡即 `_clear_aggro` 掉回常规决策；`take_damage` 加第三参 `attacker: Node = null`（玩家咬击/冲锋、AI 互咬均传 self，环境饥饿掉血不设仇恨）；`PlayerDino.take_damage` 加第二参 `attacker: Node = null`。
+2. **攻击表现与择食修正（A 路）**：AI 命中即播撕咬/前扑动画 `_play_attack_anim`（同一目标 1s 内不重复 `ATTACK_ANIM_THROTTLE`，切换目标立即触发）；猎食尸体 `try_eat()` 失败（已空/淡出中）放弃猎物回 WANDER，不再原地空咬；`_has_ally_near`/`_herd_center` 补 `is_dead` 过滤——死亡个体不再计入 PACK 伤害加成与兽群聚群中心。
+3. **地图专属物种（B 路）**：`Maps.MapDef` 新增 `extra_roster: Array[String]`（森林+似鸡龙/三角龙、雪岭+甲龙/似鸡龙、荒原+迅猛龙/似鸡龙、峡谷+食肉牛龙/霸王龙高难加压），`EcosystemDirector` 经 `set_map_def` 注入、`_build_roster` 末尾并入基础 11+X 花名册；无效 species_id 有 `AIDino._ready` 回退迅猛龙兜底（四图实际全部使用 `DinoSpecies.ID_*` 常量，不会触发）。
+4. **随机事件系统（B 路）**：新建 `scripts/game/RandomEvents.gd`——90~150 秒冷却抽一事件、持续 25~40 秒，IDLE/ACTIVE 状态机保证不重入；三事件数据驱动目录（兽群迁徙→`EcosystemDirector.spawn_herd` 边缘锚点 ±8m 聚簇落位、避水重试、避玩家出生点 20m，结束不回收由 TARGET_POP 调控；风暴→`DayNightCycle.set_storm` 雾密度 ×3/太阳能量 ×0.6；丰饶期→`FoliageSpawner.set_abundant` 重生间隔 ÷4 + 立即补生 5 株）；开始/结束横幅经 `event_started/event_ended` 接 `HUD.show_banner`；`_exit_tree` 仅在 ACTIVE 时回滚未结束的风暴/丰饶——`Main._restart_run` 旧实例 queue_free（帧末执行）+ 同帧新建实例（90s+ 后才可能触发），回滚恰好作用于延续的 DayNightCycle/FoliageSpawner，无跨局误伤路径；`Main` 接线 `_spawn_random_events` 并入 `_start_game/_restart_run`。
+5. **受击震动（A 路）**：`PlayerDino.take_damage` 落血反馈 `Input.vibrate_handheld(40)`（仅 Android feature；is_dead 早退保证死后不触发）。
+6. **版本与自适应图标（C 路）**：`project.godot` 仅 `config/version` 一行 0.1.0→0.2.0；`export_presets.cfg` Android preset 三键填入 `assets/icons/icon_432.png`（主图标+自适应前景）与 `icon_bg_432.png`（自适应背景，均为 432×432）；`PauseMenu` 主层底部新增 v0.2.0 小字版本标签（`ProjectSettings.get_setting` 带默认值，随主层显隐）。
+
+**终验修复（本次交叉验证新发现，均已修复）**：
+- `export_presets.cfg` 的 `permissions/vibrate=false` 与新加的 `Input.vibrate_handheld(40)` 不配套——Android 真机上无 VIBRATE 权限震动会静默无效，已改 `permissions/vibrate=true`。涉及 `export_presets.cfg`。
+- `DayNightCycle.set_storm(false)` 原实现无条件恢复雾密度——若在"从未开过风暴"时被误调，会把荒原图的 0.013 等非默认密度错误写成初始 0.006（当前调用路径：`_end_storm` 仅在风暴 ACTIVE 收尾、`_exit_tree` 仅在 ACTIVE 回滚，均满足"开过风暴"，故为隐患而非现行 bug）。已加 was_on 转换沿守卫：仅"开 → 关"时恢复。涉及 `scripts/game/DayNightCycle.gd`。
+
+**终验通过项备忘**：take_damage 三方签名全 9 处调用点参数个数/顺序逐一无错位（PlayerDino 无 by_player 概念，AI 咬玩家传 `(amount, self)` 两参匹配其新签名）；仇恨分支位于 `_decide` 最前（0.25s 决策粒度消费 6s 窗口）、失效清理三条件完备、反击 `hunt_target` 与 `_hunt` 的 Node3D 类型兼容、`last_by_player` 计分链路（`_die` → `died` → `handle_ai_death` → `ai_died` → `Main._on_ai_died.record_kill`）不受影响；`spawn_herd` 个体经 `_spawn_ai_at` 统一连接 `died` 信号与登记花名册（尸体生成/计分链路完整）；风暴期雾密度每帧由 `_apply_day_night` 末尾重写、结束恢复值取自 `_map_def.fog_density` 非硬编码；三张图专属物种 id 与事件兽群池物种 id 均为已验证常量；新代码全 Tab 缩进/中文注释/无 emoji/强类型。
+
+**需真机/编辑器实测验证**：随机事件三态表现（兽群聚簇落位/风暴雾效与恢复/丰饶补生节奏）与 AI 仇恨反击、逃跑、攻击动画节流均为运行时行为，静态审查无法覆盖，需编辑器运行或真机实测确认手感；两张新图标 PNG 尚无 `.import` 文件，首次在 Godot 编辑器打开项目时自动生成导入配置后，APK 导出才会携带自适应图标。
+

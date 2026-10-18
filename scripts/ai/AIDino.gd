@@ -29,6 +29,8 @@ const THIRST_MAX: int = 100
 const THIRST_INTERVAL: float = 45.0
 const DRINK_RATE: float = 40.0
 const DECISION_INTERVAL: float = 0.25
+const AGGRO_DURATION: float = 6.0          # 受击仇恨持续时间(秒)
+const ATTACK_ANIM_THROTTLE: float = 1.0    # 攻击动画节流:同一目标 1 秒内不重复触发
 
 const AI_MEAT_HUNGER: int = 30
 const AI_MEAT_HEAL: int = 10
@@ -69,6 +71,12 @@ var last_by_player: bool = false
 # 执行层（_graze/_drink）只消费缓存，避免每帧对全组做 O(n) 距离扫描
 var _cached_plant: Node3D = null
 var _cached_water: WaterSource = null
+# 受击仇恨:被打后 6 秒报复窗口,由 _decide 最优先消费,超时或目标失效即清空
+var _aggro_target: Node3D = null
+var _aggro_timer: float = 0.0
+# 攻击动画节流:记录最近一次触发的目标与剩余冷却
+var _attack_anim_target: Node = null
+var _attack_anim_timer: float = 0.0
 
 @onready var state_controller: StateController = $StateController
 @onready var dino_visual: DinoVisual = $DinoVisual
@@ -114,6 +122,8 @@ func _physics_process(delta: float) -> void:
 
 	if attack_timer > 0.0:
 		attack_timer -= delta
+	if _attack_anim_timer > 0.0:
+		_attack_anim_timer -= delta
 
 	_update_vitals(delta)
 	_clamp_to_map()
@@ -123,6 +133,23 @@ func _physics_process(delta: float) -> void:
 
 # ================= 决策 =================
 func _decide() -> void:
+	# 仇恨最优先:受击后的报复窗口内,无视过饥/过渴等常规优先级,只按体型规则打或跑(肉食/草食通用)
+	if _aggro_target != null:
+		_aggro_timer -= DECISION_INTERVAL
+		var target_valid: bool = is_instance_valid(_aggro_target) and not _target_is_dead(_aggro_target)
+		if not target_valid or _aggro_timer <= 0.0:
+			# 超时或目标已死/已释放:清空仇恨,掉回常规决策
+			_clear_aggro()
+		elif _can_beat_attacker(_aggro_target):
+			# 攻击者体型 ≤ 自己×0.9 → 打得过,反击
+			hunt_target = _aggro_target
+			state_controller.transition_to(StateController.State.HUNT)
+			return
+		else:
+			# 打不过 → 逃跑
+			flee_target = _aggro_target
+			state_controller.transition_to(StateController.State.FLEE)
+			return
 	var threat: Node3D = _find_threat()
 	if threat != null:
 		flee_target = threat
@@ -163,6 +190,31 @@ func _prey_weak(prey: Node3D) -> bool:
 	if prey is AIDino:
 		return (prey as AIDino).current_size < current_size * 0.7
 	return false
+
+
+## 清空仇恨状态
+func _clear_aggro() -> void:
+	_aggro_target = null
+	_aggro_timer = 0.0
+
+
+## 目标是否已死亡(尸体等其他类型不算)
+func _target_is_dead(target: Node3D) -> bool:
+	if target is AIDino:
+		return (target as AIDino).is_dead
+	if target is PlayerDino:
+		return (target as PlayerDino).is_dead
+	return false
+
+
+## 仇恨体型规则(阈值风格参考 _find_prey 的 ×0.9):攻击者体型 ≤ 自己×0.9 视为打得过,可反击
+func _can_beat_attacker(attacker: Node3D) -> bool:
+	var a_size: float = 0.0
+	if attacker is PlayerDino:
+		a_size = (attacker as PlayerDino).get_size()
+	elif attacker is AIDino:
+		a_size = (attacker as AIDino).current_size
+	return a_size <= current_size * 0.9
 
 
 # ================= 行为 =================
@@ -215,13 +267,28 @@ func _hunt(delta: float) -> void:
 	# 接触攻击
 	if d <= ATTACK_RANGE and attack_timer <= 0.0:
 		attack_timer = attack_cooldown
+		# 攻击表现:命中即播放撕咬/前扑动画(同一目标 1s 内不重复)
+		_play_attack_anim(hunt_target)
 		if hunt_target is PlayerDino:
-			(hunt_target as PlayerDino).take_damage(_effective_bite())
+			(hunt_target as PlayerDino).take_damage(_effective_bite(), self)
 		elif hunt_target is AIDino:
-			(hunt_target as AIDino).take_damage(_effective_bite(), false)
+			(hunt_target as AIDino).take_damage(_effective_bite(), false, self)
 		elif hunt_target is AICorpse:
 			if (hunt_target as AICorpse).try_eat():
 				_eat(AI_MEAT_HUNGER, AI_MEAT_HEAL)
+			else:
+				# 尸体已空/淡出中:放弃猎物回漫游,不再原地空咬
+				hunt_target = null
+				state_controller.transition_to(StateController.State.WANDER)
+
+
+## 攻击动画节流:同一目标 1 秒内不重复触发;切换目标则立即触发
+func _play_attack_anim(target: Node) -> void:
+	if target == _attack_anim_target and _attack_anim_timer > 0.0:
+		return
+	_attack_anim_target = target
+	_attack_anim_timer = ATTACK_ANIM_THROTTLE
+	dino_visual.play_attack()
 
 
 func _graze(delta: float) -> void:
@@ -294,10 +361,14 @@ func on_eat_plant() -> void:
 
 
 # ================= 受伤 / 死亡 =================
-func take_damage(amount: int, by_player: bool) -> void:
+func take_damage(amount: int, by_player: bool, attacker: Node = null) -> void:
 	if is_dead:
 		return
 	last_by_player = by_player
+	# 受击仇恨:有效攻击者(非自身、非环境伤害) → 记入报复窗口,由 _decide 最优先消费
+	if attacker != null and attacker != self and is_instance_valid(attacker) and attacker is Node3D:
+		_aggro_target = attacker as Node3D
+		_aggro_timer = AGGRO_DURATION
 	var dmg: int = amount
 	if species.passive == DinoSpecies.PassiveAbility.DEFENSE:
 		dmg = int(round(amount * 0.55))
@@ -325,7 +396,7 @@ func _effective_bite() -> int:
 
 func _has_ally_near() -> bool:
 	for n in get_tree().get_nodes_in_group(Groups.AI):
-		if n != self and is_instance_valid(n) and (n as AIDino).species.id == species.id:
+		if n != self and is_instance_valid(n) and not (n as AIDino).is_dead and (n as AIDino).species.id == species.id:
 			if global_position.distance_to((n as AIDino).global_position) <= 14.0:
 				return true
 	return false
@@ -450,7 +521,7 @@ func _herd_center() -> Vector3:
 	for n in get_tree().get_nodes_in_group(Groups.AI):
 		if n != self and is_instance_valid(n):
 			var other: AIDino = n as AIDino
-			if other.species.id == species.id and global_position.distance_to(other.global_position) < 30.0:
+			if not other.is_dead and other.species.id == species.id and global_position.distance_to(other.global_position) < 30.0:
 				sum += other.global_position
 				cnt += 1
 	return sum / cnt if cnt > 0 else Vector3.ZERO

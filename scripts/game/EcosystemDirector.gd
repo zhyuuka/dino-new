@@ -20,6 +20,7 @@ var _terrain: TerrainGenerator = null
 var _player_spawn: Vector3 = Vector3.ZERO
 var _map_radius_getter: Callable = Callable()
 var _parent: Node3D = null
+var _map_def: Maps.MapDef = null
 
 
 ## 注入地形、玩家出生点、地图半径查询（Main._map_radius 传 Callable）与动态容器
@@ -33,6 +34,11 @@ func setup(terrain: TerrainGenerator, player_spawn: Vector3, map_radius_getter: 
 ## 地形建好后更新引用（选图期间地形尚未生成，Main._ready 时先以 null 注入）
 func set_terrain(terrain: TerrainGenerator) -> void:
 	_terrain = terrain
+
+
+## 注入地图预设（与 DayNightCycle.set_map_def 同款约定）：提供 extra_roster 等地图生态基调
+func set_map_def(def: Maps.MapDef) -> void:
+	_map_def = def
 
 
 ## 生成整支生态花名册 + 传说霸主（开局 / 死亡重开时各调用一次）
@@ -77,6 +83,26 @@ func clear_all() -> void:
 	pop_timer = 0.0
 
 
+## 兽群迁徙（随机事件调用）：同一物种 count 只在地图同一边缘聚簇生成。
+## 聚簇 = 先在边缘随机取一个锚点，个体在锚点 ±8m 内散布落位；
+## 生成后并入生态花名册，事件结束不做回收，由 TARGET_POP 补员机制自然调控。
+func spawn_herd(species_id: String, count: int) -> void:
+	var radius: float = _map_radius_getter.call()
+	var ang: float = randf() * TAU
+	var anchor := Vector3(sin(ang), 0.0, cos(ang)) * (radius - 20.0)
+	# 锚点避开玩家出生点（比 _spawn_ai 的 14m 保护更宽，取 20m，过近则镜像到对侧）
+	if anchor.distance_to(_player_spawn) < 20.0:
+		anchor = -anchor
+	for i in count:
+		var pos := anchor + Vector3(randf_range(-8.0, 8.0), 0.0, randf_range(-8.0, 8.0))
+		# 落点避水：水下则重散布，最多尝试 8 次后接受原落点（边缘水域罕见）
+		for attempt in 8:
+			if _terrain == null or not _terrain.is_under_water(pos.x, pos.z):
+				break
+			pos = anchor + Vector3(randf_range(-8.0, 8.0), 0.0, randf_range(-8.0, 8.0))
+		_spawn_ai_at(species_id, _random_ai_stage(0), pos)
+
+
 ## 传说霸主：地图上持续游荡的顶级霸王龙（最高成长阶段），作为世界级威胁
 func _spawn_boss() -> void:
 	var ai: AIDino = AIScene.instantiate() as AIDino
@@ -103,6 +129,9 @@ func _build_roster(player_stage: int) -> Array[String]:
 		roster.append(DinoSpecies.ID_TREX)
 	if player_stage >= 3:
 		roster.append(DinoSpecies.ID_TREX)
+	# 地图专属加成物种：并入基础 11+X 花名册之后，强化各图生态基调
+	if _map_def != null:
+		roster.append_array(_map_def.extra_roster)
 	return roster
 
 
@@ -118,17 +147,23 @@ func _random_ai_stage(player_stage: int) -> int:
 
 
 func _spawn_ai(species_id: String, stage: int) -> void:
-	var ai: AIDino = AIScene.instantiate() as AIDino
-	ai.species_id = species_id
-	ai.start_growth_stage = stage
 	var radius: float = _map_radius_getter.call()
-	ai.map_radius = radius
 	var angle: float = randf() * TAU
 	var dist: float = randf() * (radius - 6.0)
 	var pos: Vector3 = Vector3(sin(angle) * dist, 0.0, cos(angle) * dist)
 	# 不要紧贴玩家出生点
 	if pos.distance_to(_player_spawn) < 14.0:
 		pos = pos.normalized() * 30.0 if pos.length() > 0.1 else Vector3(30, 0, 0)
+	_spawn_ai_at(species_id, stage, pos)
+
+
+## 在指定 xz 落位生成一只 AI（贴地 + 连接死亡信号 + 登记花名册），
+## 供 _spawn_ai 的全域随机落位与 spawn_herd 的聚簇落位共用。
+func _spawn_ai_at(species_id: String, stage: int, pos: Vector3) -> void:
+	var ai: AIDino = AIScene.instantiate() as AIDino
+	ai.species_id = species_id
+	ai.start_growth_stage = stage
+	ai.map_radius = _map_radius_getter.call()
 	_parent.add_child(ai)
 	var ay: float = _terrain.get_height(pos.x, pos.z) if _terrain != null else 1.5
 	ai.global_position = Vector3(pos.x, ay + 0.2, pos.z)

@@ -429,7 +429,8 @@ func try_bite() -> void:
 	fwd = fwd.normalized()
 	for node in get_tree().get_nodes_in_group(Groups.AI):
 		if _bite_hit(node, fwd):
-			(node as AIDino).take_damage(_effective_bite(), true)
+			# 补传 self:让 AI 记住仇恨来源是玩家,便于其反击/逃跑决策
+			(node as AIDino).take_damage(_effective_bite(), true, self)
 	for node in get_tree().get_nodes_in_group(Groups.CORPSE):
 		if _bite_hit(node, fwd):
 			var corpse: AICorpse = node as AICorpse
@@ -499,7 +500,8 @@ func _do_charge_damage() -> void:
 		if to.length() > CHARGE_REACH or fwd.dot(to.normalized()) < 0.3:
 			continue
 		charged_targets.append(node)
-		(node as AIDino).take_damage(dmg, true)
+		# 补传 self:冲锋撞击同样让 AI 记住仇恨来源
+		(node as AIDino).take_damage(dmg, true, self)
 		# 击退
 		var kb: Vector3 = to.normalized() * 6.0
 		(node as AIDino).velocity += kb
@@ -549,7 +551,7 @@ func _add_growth_meal() -> void:
 
 
 # ================= 受伤 / 死亡 =================
-func take_damage(amount: int) -> void:
+func take_damage(amount: int, attacker: Node = null) -> void:
 	if is_dead:
 		return
 	var dmg: int = amount
@@ -559,6 +561,9 @@ func take_damage(amount: int) -> void:
 	health_changed.emit(current_health, max_health)
 	dino_visual.pulse_damage()
 	_sfx(SFX_HURT)
+	# 落血反馈:Android 手柄震动 40ms;死亡流程走 _die() 不震动,且 is_dead 早退保证死后不再触发
+	if OS.has_feature("android"):
+		Input.vibrate_handheld(40)
 	if current_health <= 0:
 		_die()
 

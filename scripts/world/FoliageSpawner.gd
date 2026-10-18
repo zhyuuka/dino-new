@@ -5,7 +5,7 @@ extends Node3D
 
 const FoliageScene: PackedScene = preload("res://scenes/Foliage.tscn")
 
-const RESPAWN_INTERVAL: float = 12.0
+const BASE_RESPAWN_INTERVAL: float = 12.0  # 默认重生间隔（丰饶期临时 ÷4，结束恢复）
 
 # 由 Main 注入：地形引用 + 本地图的植物模型与数量
 var terrain: TerrainGenerator
@@ -14,6 +14,8 @@ var plant_count: int = 30
 
 var foliage: Array[Foliage] = []
 var respawn_timers: Array[float] = []
+## 被吃后的重生等待秒数（丰饶期由 set_abundant 临时缩短）
+var respawn_interval: float = BASE_RESPAWN_INTERVAL
 
 
 func _ready() -> void:
@@ -33,6 +35,14 @@ func _process(delta: float) -> void:
 		respawn_timers.remove_at(i)
 
 
+## 丰饶期开关（随机事件调用）：生效期重生间隔 ÷4，触发瞬间额外立即重生 5 株
+func set_abundant(on: bool) -> void:
+	respawn_interval = BASE_RESPAWN_INTERVAL / 4.0 if on else BASE_RESPAWN_INTERVAL
+	if on:
+		for i in 5:
+			_spawn_foliage(_random_position())
+
+
 func _spawn_foliage(pos: Vector3) -> void:
 	var f: Foliage = FoliageScene.instantiate() as Foliage
 	if not plant_slugs.is_empty():
@@ -46,7 +56,7 @@ func _spawn_foliage(pos: Vector3) -> void:
 func _on_foliage_eaten(f: Foliage) -> void:
 	# 信号携带被吃实例本身，直接移除并安排重生（旧的扫描逻辑在实例仍 valid 时永远失效）
 	foliage.erase(f)
-	respawn_timers.append(RESPAWN_INTERVAL)
+	respawn_timers.append(respawn_interval)
 
 
 ## 随机位置：有地形时按地形高度取 xz 并避水，否则回退到旧的圆内随机
