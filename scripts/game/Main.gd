@@ -102,8 +102,8 @@ func _on_species_selected(species_id: String, is_continue: bool) -> void:
 
 func _continue_game() -> void:
 	var d: Dictionary = SaveManager.load_save()
-	_map_def = Maps.by_id(d.get("map_id", "forest"))
-	var sid: String = d.get("species_id", "raptor")
+	_map_def = Maps.by_id(d.get("map_id", Maps.DEFAULT_MAP_ID))
+	var sid: String = d.get("species_id", DinoSpecies.ID_RAPTOR)
 	_start_game(sid, true)
 
 
@@ -267,7 +267,7 @@ func _spawn_ecosystem(player_stage: int) -> void:
 ## 传说霸主：地图上持续游荡的顶级霸王龙（最高成长阶段），作为世界级威胁
 func _spawn_boss() -> void:
 	var ai: AIDino = AIScene.instantiate() as AIDino
-	ai.species_id = "trex"
+	ai.species_id = DinoSpecies.ID_TREX
 	ai.start_growth_stage = DinoSpecies.MAX_STAGE
 	ai.map_radius = _map_radius()
 	var ang: float = randf() * TAU
@@ -282,13 +282,13 @@ func _spawn_boss() -> void:
 
 
 func _build_roster(player_stage: int) -> Array[String]:
-	var roster: Array[String] = ["galli", "galli", "galli", "trike", "trike", "anky", "anky", "raptor", "raptor", "raptor", "carno"]
+	var roster: Array[String] = [DinoSpecies.ID_GALLI, DinoSpecies.ID_GALLI, DinoSpecies.ID_GALLI, DinoSpecies.ID_TRIKE, DinoSpecies.ID_TRIKE, DinoSpecies.ID_ANKY, DinoSpecies.ID_ANKY, DinoSpecies.ID_RAPTOR, DinoSpecies.ID_RAPTOR, DinoSpecies.ID_RAPTOR, DinoSpecies.ID_CARNO]
 	if player_stage >= 1:
-		roster.append("carno")
+		roster.append(DinoSpecies.ID_CARNO)
 	if player_stage >= 2:
-		roster.append("trex")
+		roster.append(DinoSpecies.ID_TREX)
 	if player_stage >= 3:
-		roster.append("trex")
+		roster.append(DinoSpecies.ID_TREX)
 	return roster
 
 
@@ -385,8 +385,54 @@ func _on_player_died() -> void:
 	var best: String = "最佳存活 %d 秒 / 最多击杀 %d" % [d.get("best_time", 0), d.get("best_kills", 0)]
 	hud.show_death("你被猎杀了！\n第 %d 代 · 存活 %d 秒 · 击杀 %d\n成长已保留，下一局继续变强\n%s" % [player.generation, int(survival_time), kill_count, best])
 	await get_tree().create_timer(3.5).timeout
-	skip_select = true
-	get_tree().reload_current_scene()
+	# 不整场景重载：地形/植被等世界资产无需重建，移动端可避免死亡后数秒卡顿，仅重置运行期节点
+	_restart_run()
+
+
+## 死亡重开：只释放并重建"运行期"节点（玩家/AI/HUD/触屏/尸体/选图选种残留），
+## 保留世界资产（地形、水源、植被、资源点、树石、环境音），成长按存档续代
+func _restart_run() -> void:
+	# 1) 先释放运行期节点，再重建（全部为 instantiate 新实例，信号连接不会重复）
+	if player != null:
+		player.queue_free()
+		player = null
+	# AI（含 boss）直接 queue_free：died 信号仅在各自 _die 中手动 emit，不会触发副作用
+	for ai in ai_dinos:
+		ai.queue_free()
+	ai_dinos.clear()
+	if hud != null:
+		hud.queue_free()
+		hud = null
+	if touch_controls != null:
+		touch_controls.queue_free()
+		touch_controls = null
+	# 场上尸体统一清掉（组常量见 Groups.CORPSE）
+	for corpse in get_tree().get_nodes_in_group(Groups.CORPSE):
+		corpse.queue_free()
+	# 选图/选种界面残留（若仍在树中）一并清理
+	for child in dynamic.get_children():
+		if child is SpeciesSelect or child is MapSelect:
+			child.queue_free()
+	species_select = null
+	# 2) 重置运行期状态（day_t 保持不动：世界时间连续更自然）
+	kill_count = 0
+	survival_time = 0.0
+	score_timer = 0.0
+	pop_timer = 0.0
+	is_over = false
+	boss_ai = null
+	boss_respawn_timer = 0.0
+	# 3) 从存档读回成长（死亡时已写盘：generation 已 +1）
+	var d: Dictionary = SaveManager.load_save()
+	var sid: String = d.get("species_id", DinoSpecies.ID_RAPTOR)
+	var stage: int = d.get("growth_stage", 0)
+	var gen: int = d.get("generation", 1)
+	# 4) 复用现成生成函数重建运行期角色与 UI（顺序与 _start_game 一致）
+	_spawn_hud()
+	_spawn_player(sid, stage, gen)
+	_spawn_ecosystem(stage)
+	_spawn_touch_controls()
+	hud.show_hint("第 %d 代开始：成长已保留，地形与植被延续，继续变强！" % gen)
 
 
 func _on_ai_died(ai: AIDino, by_player: bool) -> void:
@@ -422,7 +468,7 @@ func _process(delta: float) -> void:
 	if pop_timer >= RESPAWN_CHECK:
 		pop_timer = 0.0
 		if ai_dinos.size() < TARGET_POP:
-			var sid: String = "galli" if randf() < 0.5 else "raptor"
+			var sid: String = DinoSpecies.ID_GALLI if randf() < 0.5 else DinoSpecies.ID_RAPTOR
 			_spawn_ai(sid, _random_ai_stage(player.growth_stage if player != null else 0))
 	# 传说霸主重生
 	if boss_ai == null and boss_respawn_timer > 0.0:
@@ -434,7 +480,9 @@ func _process(delta: float) -> void:
 	if score_timer >= 0.5:
 		score_timer = 0.0
 		var gen: int = player.generation if player != null else 1
-		hud.set_score(int(survival_time), kill_count, gen)
+		# hud 在选图/选种界面期间尚未生成，需判空
+		if hud != null:
+			hud.set_score(int(survival_time), kill_count, gen)
 	# 技能冷却显示（仅冲锋物种）
 	if player != null and is_instance_valid(player) and player.has_charge_ability():
 		touch_controls.set_ability_cooldown(player.charge_cooldown_timer, PlayerDino.CHARGE_COOLDOWN)

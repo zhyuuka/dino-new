@@ -21,7 +21,7 @@ signal banner(text: String)           # 大字提示（成长 / 技能）
 signal hint(text: String)             # 上下文小提示（饮水等）
 
 # ---------- 由 Main 在 add_child 之前赋值 ----------
-var species_id: String = "raptor"
+var species_id: String = DinoSpecies.ID_RAPTOR
 var start_growth_stage: int = 0
 var generation: int = 1
 var map_radius: float = 140.0
@@ -150,13 +150,13 @@ const ACCEL: float = 18.0
 const JUMP_VELOCITY: float = 7.5
 
 func _ready() -> void:
-	add_to_group("player")
+	add_to_group(Groups.PLAYER)
 	sfx = AudioStreamPlayer.new()
 	sfx.volume_db = -4.0
 	add_child(sfx)
 	species = DinoSpecies.by_id(species_id)
 	if species == null:
-		species = DinoSpecies.by_id("raptor")
+		species = DinoSpecies.by_id(DinoSpecies.ID_RAPTOR)
 	growth_stage = clampi(start_growth_stage, 0, DinoSpecies.MAX_STAGE)
 	growth_meals = 0
 	_apply_species_appearance()
@@ -426,10 +426,10 @@ func try_bite() -> void:
 	var fwd: Vector3 = -global_transform.basis.z
 	fwd.y = 0.0
 	fwd = fwd.normalized()
-	for node in get_tree().get_nodes_in_group("ai"):
+	for node in get_tree().get_nodes_in_group(Groups.AI):
 		if _bite_hit(node, fwd):
 			(node as AIDino).take_damage(_effective_bite(), true)
-	for node in get_tree().get_nodes_in_group("corpse"):
+	for node in get_tree().get_nodes_in_group(Groups.CORPSE):
 		if _bite_hit(node, fwd):
 			var corpse: AICorpse = node as AICorpse
 			if corpse.try_eat():
@@ -488,7 +488,7 @@ func _do_charge_damage() -> void:
 	fwd.y = 0.0
 	fwd = fwd.normalized()
 	var dmg: int = int(round(_effective_bite() * CHARGE_DMG_MULT))
-	for node in get_tree().get_nodes_in_group("ai"):
+	for node in get_tree().get_nodes_in_group(Groups.AI):
 		if node in charged_targets:
 			continue
 		if not is_instance_valid(node):
@@ -571,7 +571,7 @@ func _die() -> void:
 	if is_dead:
 		return
 	is_dead = true
-	remove_from_group("player")
+	remove_from_group(Groups.PLAYER)
 	died.emit()
 	dino_visual.shrink_death()
 	_sfx(SFX_DEATH)
@@ -588,7 +588,7 @@ func _save_progress() -> void:
 
 # ================= 工具 =================
 func _is_in_water() -> bool:
-	for w in get_tree().get_nodes_in_group("water"):
+	for w in get_tree().get_nodes_in_group(Groups.WATER):
 		if is_instance_valid(w) and w is WaterSource:
 			var ws: WaterSource = w as WaterSource
 			var d: float = Vector2(global_position.x - ws.global_position.x, global_position.z - ws.global_position.z).length()
@@ -646,7 +646,7 @@ func _update_pack() -> void:
 	pack_bonus = false
 	if species.passive != DinoSpecies.PassiveAbility.PACK:
 		return
-	for node in get_tree().get_nodes_in_group("ai"):
+	for node in get_tree().get_nodes_in_group(Groups.AI):
 		if is_instance_valid(node) and node != self and (node as AIDino).species.id == species.id:
 			if global_position.distance_to(node.global_position) <= PACK_RADIUS:
 				pack_bonus = true

@@ -3,6 +3,9 @@ extends RefCounted
 ## 地图预设：地形来源（程序化噪声 / 下载高度图）+ 资源散布 + 天空/雾 基调。
 ## 所有自然模型均来自 Poly Haven（CC0 / 公有领域），高度图来自 3DTexel 社区库（CC0）。
 
+## 默认地图 id：存档缺省与选图兜底统一引用此常量，避免业务代码裸写 "forest"
+const DEFAULT_MAP_ID := "forest"
+
 class MapDef:
 	var id: String = ""
 	var name: String = ""
@@ -57,7 +60,7 @@ static func by_id(id: String) -> MapDef:
 # 1) 森林谷地：起伏丘陵 + 茂密针叶林 + 三处湖泊
 static func _forest() -> MapDef:
 	var d := MapDef.new()
-	d.id = "forest"; d.name = "森林谷地"; d.blurb = "起伏丘陵，茂密针叶林，三处湖泊，最适合新手。"
+	d.id = DEFAULT_MAP_ID; d.name = "森林谷地"; d.blurb = "起伏丘陵，茂密针叶林，三处湖泊，最适合新手。"
 	d.mode = 0; d.noise_seed = 7; d.noise_freq = 0.014; d.max_height = 22.0; d.snow_line = 0.8; d.water_level = 1.2
 	d.water_points = [Vector3(-45, 0, 45), Vector3(70, 0, -55), Vector3(-80, 0, -70)]
 	d.tree_models = ["fir_tree_01", "fir_sapling_medium", "island_tree_01", "island_tree_02", "dead_tree_trunk"]

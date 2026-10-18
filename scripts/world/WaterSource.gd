@@ -10,6 +10,6 @@ extends Node3D
 
 
 func _ready() -> void:
-	add_to_group("water")
+	add_to_group(Groups.WATER)
 	if water_mesh != null:
 		water_mesh.size = Vector3(radius * 2.0, 0.25, radius * 2.0)

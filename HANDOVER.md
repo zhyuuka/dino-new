@@ -468,3 +468,23 @@ Step 6（最终导出）      → APK 构建 → 签名校验 → 提交 + push
 - 地图选择界面不需要花哨——4 个按钮够用。
 - 不要重写架构或引入新的设计模式。当前架构足够。
 - 如果某一步出现 Godot 崩溃或 `ERR_FILE`，优先检查资源路径是否正确（尤其是 gltf 的 `textures/` 相对子目录在导入时是否正确 resolve——已验证过，Poly Haven 的 gltf 引用 `textures/xxx.jpg`，下载时保留了该目录结构，导入正常）。
+
+---
+
+## 九、P0/P1 修复记录（2026-10-18）
+
+> 终验子会话追加。
+
+1. **植物被吃后永不重生（P0）**：`Foliage.eaten` 信号改为携带节点自身 `eaten(node: Foliage)`（emit 仍在 `queue_free` 之前），`FoliageSpawner._on_foliage_eaten` 改为 `foliage.erase(f)` + 重生计时——旧的按下标扫描逻辑在实例仍 valid 时永远匹配不上，植物被吃后无法重生。涉及 `scripts/world/Foliage.gd`、`scripts/world/FoliageSpawner.gd`。
+2. **组名常量化（P1）**：新建 `scripts/core/Groups.gd`（`class_name Groups`），player/ai/corpse/plant/water/resource 六个组名全项目统一引用常量，消除裸字符串拼写风险；`.tscn` 中无组与信号连接残留。涉及 `scripts/core/Groups.gd` 及 PlayerDino/AIDino/AICorpse/Foliage/ResourcePoint/WaterSource/Minimap/Main 等引用文件。
+3. **存档安全（P0/P1）**：`SaveManager` 新增 `SAVE_VERSION` 读取侧校验（`int()` 包裹，防 JSON 数字解析为浮点导致版本比较失效）、原子写（先写 `.tmp` 再 `DirAccess.rename_absolute` 覆盖，失败时清理 tmp；官方支持 `user://` 路径）、默认 `map_id` 统一走 `Maps.DEFAULT_MAP_ID`。涉及 `scripts/data/SaveManager.gd`、`scripts/data/Maps.gd`。
+4. **高度图导出后静默失效（P0）**：`TerrainGenerator._generate_heights` 改用 `load() as Texture2D` 取像素（`Image.load_from_file` 在导出包内读不到未打包的原始 png，导致峡谷地图静默回退噪声地形），`is_compressed()` 短路后 `decompress()`。涉及 `scripts/world/TerrainGenerator.gd`。
+5. **死亡重开移动端卡顿（P1）**：`Main._on_player_died` 由整场景 `reload_current_scene()` 改为 `_restart_run()`——仅释放并重建玩家/AI/HUD/触屏/尸体/选图选种残留等运行期节点，保留地形/水源/植被/资源点等世界资产，成长从存档续代；`_on_menu` 与 `static skip_select` 语义不变。涉及 `scripts/game/Main.gd`。
+6. **AI 感知与小地图性能（P1）**：`AIDino` 的 GRAZE/DRINK 最近目标改为 0.25s 决策周期内缓存、执行层只消费缓存（消除每帧全组 O(n) 距离扫描），目标失效时优雅退回漫游等下轮决策刷新；`Minimap` 重绘降为 8Hz（delta 累积器触发后归零），`MAP_SCALE=122` 对齐 `terrain.half_extent(128)-6`。涉及 `scripts/ai/AIDino.gd`、`scripts/ui/Minimap.gd`。
+
+**未执行事项**：
+- P1 资源瘦身（APK 体积）：需要 Godot 编辑器环境做纹理压缩（ASTC）与模型精简，本次未执行。
+- `HeightMapShape3D` 因 Godot 4.4 不支持自定义格距（格距固定 1 米，与 2 米格距地形对不上）而保留 trimesh 碰撞，待引擎升级后迁移。
+
+**终验补充修复（本次交叉验证新发现）**：
+- `Main._process` 计分刷新处 `hud.set_score` 增加 `hud != null` 防护——选图/选种界面期间 hud 尚未生成，原代码每 0.5 秒会刷一次 null instance 运行时错误。涉及 `scripts/game/Main.gd`。

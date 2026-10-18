@@ -11,7 +11,7 @@ extends CharacterBody3D
 signal died(node: AIDino, by_player: bool)
 
 # 由 Main 在 add_child 之前赋值
-var species_id: String = "raptor"
+var species_id: String = DinoSpecies.ID_RAPTOR
 var start_growth_stage: int = 0
 var map_radius: float = 80.0
 
@@ -65,16 +65,20 @@ var wander_min_pause: float = 1.0
 var hunt_target: Node3D = null
 var flee_target: Node3D = null
 var last_by_player: bool = false
+# 决策周期内缓存的最近目标：由 _decide（每 DECISION_INTERVAL 秒）刷新，
+# 执行层（_graze/_drink）只消费缓存，避免每帧对全组做 O(n) 距离扫描
+var _cached_plant: Node3D = null
+var _cached_water: WaterSource = null
 
 @onready var state_controller: StateController = $StateController
 @onready var dino_visual: DinoVisual = $DinoVisual
 
 
 func _ready() -> void:
-	add_to_group("ai")
+	add_to_group(Groups.AI)
 	species = DinoSpecies.by_id(species_id)
 	if species == null:
-		species = DinoSpecies.by_id("raptor")
+		species = DinoSpecies.by_id(DinoSpecies.ID_RAPTOR)
 	growth_stage = clampi(start_growth_stage, 0, DinoSpecies.MAX_STAGE)
 	dino_visual.setup(species_id, species.body_color, species.dark_color)
 	_apply_stats()
@@ -131,17 +135,25 @@ func _decide() -> void:
 			hunt_target = prey
 			state_controller.transition_to(StateController.State.HUNT)
 			return
-		if current_thirst < 35 and _nearest_water() != null:
-			state_controller.transition_to(StateController.State.DRINK)
-			return
+		if current_thirst < 35:
+			# 仅在口渴阈值触发时才扫描水源，并把结果缓存到本决策周期
+			_cached_water = _nearest_water()
+			if _cached_water != null:
+				state_controller.transition_to(StateController.State.DRINK)
+				return
 		state_controller.transition_to(StateController.State.WANDER)
 	else:
-		if current_hunger < 55 and _nearest_plant() != null:
-			state_controller.transition_to(StateController.State.GRAZE)
-			return
-		if current_thirst < 35 and _nearest_water() != null:
-			state_controller.transition_to(StateController.State.DRINK)
-			return
+		if current_hunger < 55:
+			# 仅在饥饿阈值触发时才扫描植物，并把结果缓存到本决策周期
+			_cached_plant = _nearest_plant()
+			if _cached_plant != null:
+				state_controller.transition_to(StateController.State.GRAZE)
+				return
+		if current_thirst < 35:
+			_cached_water = _nearest_water()
+			if _cached_water != null:
+				state_controller.transition_to(StateController.State.DRINK)
+				return
 		state_controller.transition_to(StateController.State.WANDER)
 
 
@@ -213,11 +225,13 @@ func _hunt(delta: float) -> void:
 
 
 func _graze(delta: float) -> void:
-	var plant: Node3D = _nearest_plant()
-	if plant == null:
+	# 消费决策周期缓存的植物目标；目标被吃掉/移除时优雅退回漫游，
+	# 不立刻重扫全组，等下一个决策周期再刷新
+	if _cached_plant == null or not is_instance_valid(_cached_plant):
+		_cached_plant = null
 		_wander(delta)
 		return
-	var to: Vector3 = plant.global_position - global_position
+	var to: Vector3 = _cached_plant.global_position - global_position
 	to.y = 0.0
 	if to.length() > GRAZE_RANGE:
 		_apply_movement(to.normalized(), walk_speed, delta)
@@ -225,12 +239,14 @@ func _graze(delta: float) -> void:
 
 
 func _drink(delta: float) -> void:
-	var water: WaterSource = _nearest_water()
-	if water == null:
+	# 消费决策周期缓存的水源目标；水源被移除时优雅退回漫游，
+	# 不立刻重扫全组，等下一个决策周期再刷新
+	if _cached_water == null or not is_instance_valid(_cached_water):
+		_cached_water = null
 		_wander(delta)
 		return
-	var to: Vector2 = Vector2(water.global_position.x - global_position.x, water.global_position.z - global_position.z)
-	if to.length() > water.radius - 1.0:
+	var to: Vector2 = Vector2(_cached_water.global_position.x - global_position.x, _cached_water.global_position.z - global_position.z)
+	if to.length() > _cached_water.radius - 1.0:
 		_apply_movement(Vector3(to.x, 0.0, to.y).normalized(), walk_speed, delta)
 	else:
 		current_thirst = mini(current_thirst + int(DRINK_RATE * delta), THIRST_MAX)
@@ -308,7 +324,7 @@ func _effective_bite() -> int:
 
 
 func _has_ally_near() -> bool:
-	for n in get_tree().get_nodes_in_group("ai"):
+	for n in get_tree().get_nodes_in_group(Groups.AI):
 		if n != self and is_instance_valid(n) and (n as AIDino).species.id == species.id:
 			if global_position.distance_to((n as AIDino).global_position) <= 14.0:
 				return true
@@ -317,7 +333,7 @@ func _has_ally_near() -> bool:
 
 # ================= 查询 =================
 func _player() -> PlayerDino:
-	var arr: Array = get_tree().get_nodes_in_group("player")
+	var arr: Array = get_tree().get_nodes_in_group(Groups.PLAYER)
 	if arr.is_empty():
 		return null
 	return arr[0] as PlayerDino
@@ -330,7 +346,7 @@ func _find_threat() -> Node3D:
 			return apex
 	var best: Node3D = null
 	var best_d: float = FLEE_RADIUS
-	for n in get_tree().get_nodes_in_group("ai"):
+	for n in get_tree().get_nodes_in_group(Groups.AI):
 		if n == self or not is_instance_valid(n):
 			continue
 		var other: AIDino = n as AIDino
@@ -354,7 +370,7 @@ func _find_threat() -> Node3D:
 func _find_apex_threat() -> Node3D:
 	var best: Node3D = null
 	var best_d: float = APEX_RADIUS
-	for n in get_tree().get_nodes_in_group("ai"):
+	for n in get_tree().get_nodes_in_group(Groups.AI):
 		if n == self or not is_instance_valid(n):
 			continue
 		var other: AIDino = n as AIDino
@@ -374,7 +390,7 @@ func _find_apex_threat() -> Node3D:
 func _find_prey() -> Node3D:
 	var best: Node3D = null
 	var best_d: float = SENSE_RADIUS
-	for n in get_tree().get_nodes_in_group("ai"):
+	for n in get_tree().get_nodes_in_group(Groups.AI):
 		if n == self or not is_instance_valid(n):
 			continue
 		var other: AIDino = n as AIDino
@@ -390,7 +406,7 @@ func _find_prey() -> Node3D:
 			if d < best_d:
 				best_d = d
 				best = other
-	for c in get_tree().get_nodes_in_group("corpse"):
+	for c in get_tree().get_nodes_in_group(Groups.CORPSE):
 		if is_instance_valid(c):
 			var d: float = global_position.distance_to((c as Node3D).global_position)
 			if d < best_d:
@@ -408,7 +424,7 @@ func _find_prey() -> Node3D:
 func _nearest_plant() -> Node3D:
 	var best: Node3D = null
 	var best_d: float = SENSE_RADIUS
-	for n in get_tree().get_nodes_in_group("plant"):
+	for n in get_tree().get_nodes_in_group(Groups.PLANT):
 		if is_instance_valid(n):
 			var d: float = global_position.distance_to((n as Node3D).global_position)
 			if d < best_d:
@@ -419,7 +435,7 @@ func _nearest_plant() -> Node3D:
 func _nearest_water() -> WaterSource:
 	var best: WaterSource = null
 	var best_d: float = SENSE_RADIUS
-	for n in get_tree().get_nodes_in_group("water"):
+	for n in get_tree().get_nodes_in_group(Groups.WATER):
 		if is_instance_valid(n) and n is WaterSource:
 			var ws: WaterSource = n as WaterSource
 			var d: float = Vector2(global_position.x - ws.global_position.x, global_position.z - ws.global_position.z).length()
@@ -431,7 +447,7 @@ func _nearest_water() -> WaterSource:
 func _herd_center() -> Vector3:
 	var sum: Vector3 = Vector3.ZERO
 	var cnt: int = 0
-	for n in get_tree().get_nodes_in_group("ai"):
+	for n in get_tree().get_nodes_in_group(Groups.AI):
 		if n != self and is_instance_valid(n):
 			var other: AIDino = n as AIDino
 			if other.species.id == species.id and global_position.distance_to(other.global_position) < 30.0:

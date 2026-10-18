@@ -4,7 +4,7 @@ extends Node3D
 ## 被吃掉后发出 eaten 信号，由 FoliageSpawner 负责在别处重生。
 ## 加入 group "plant"。
 
-signal eaten(pos: Vector3)
+signal eaten(node: Foliage)
 
 @onready var plant_area: Area3D = $PlantArea
 
@@ -13,7 +13,7 @@ var visual_slug: String = ""
 
 
 func _ready() -> void:
-	add_to_group("plant")
+	add_to_group(Groups.PLANT)
 	if visual_slug != "":
 		var path := "res://assets/models/nature/%s/%s_1k.gltf" % [visual_slug, visual_slug]
 		if ResourceLoader.exists(path):
@@ -38,5 +38,6 @@ func _on_body_entered(body: Node3D) -> void:
 	if is_herbivore:
 		if body.has_method("on_eat_plant"):
 			body.on_eat_plant()
-		eaten.emit(global_position)
+		# 携带自身节点发出信号，便于生成器精确定位被吃的植物；必须在 queue_free 之前发
+		eaten.emit(self)
 		queue_free()

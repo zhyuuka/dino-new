@@ -21,7 +21,7 @@ var _lick_hinted: bool = false
 
 
 func _ready() -> void:
-	add_to_group("resource")
+	add_to_group(Groups.RESOURCE)
 	_build_visual()
 
 
@@ -110,7 +110,7 @@ func _process(delta: float) -> void:
 
 
 func _player() -> PlayerDino:
-	var arr: Array = get_tree().get_nodes_in_group("player")
+	var arr: Array = get_tree().get_nodes_in_group(Groups.PLAYER)
 	if arr.is_empty():
 		return null
 	return arr[0] as PlayerDino

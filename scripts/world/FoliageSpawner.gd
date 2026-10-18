@@ -43,13 +43,10 @@ func _spawn_foliage(pos: Vector3) -> void:
 	foliage.append(f)
 
 
-func _on_foliage_eaten(pos: Vector3) -> void:
-	# 从列表移除并安排重生
-	for i in range(foliage.size()):
-		if not is_instance_valid(foliage[i]):
-			foliage.remove_at(i)
-			respawn_timers.append(RESPAWN_INTERVAL)
-			break
+func _on_foliage_eaten(f: Foliage) -> void:
+	# 信号携带被吃实例本身，直接移除并安排重生（旧的扫描逻辑在实例仍 valid 时永远失效）
+	foliage.erase(f)
+	respawn_timers.append(RESPAWN_INTERVAL)
 
 
 ## 随机位置：有地形时按地形高度取 xz 并避水，否则回退到旧的圆内随机

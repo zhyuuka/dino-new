@@ -33,7 +33,11 @@ func _hset(i: int, j: int, v: float) -> void:
 
 func _generate_heights() -> void:
 	if _def.mode == 1 and ResourceLoader.exists("res://" + _def.heightmap_path):
-		var img := Image.load_from_file("res://" + _def.heightmap_path)
+		# 导出后原始 png 不会打进包，必须用 load() 读已导入的 CompressedTexture2D 再取像素，否则静默回退噪声
+		var tex := load("res://" + _def.heightmap_path) as Texture2D
+		var img: Image = tex.get_image() if tex != null else null
+		if img != null and img.is_compressed():
+			img.decompress()
 		if img != null:
 			var w := img.get_width(); var h := img.get_height()
 			for j in SEGMENTS + 1:
@@ -124,6 +128,7 @@ func _build_mesh() -> void:
 	mi.material_override = mat
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(mi)
+	# Godot 4.4 的 HeightMapShape3D 无 cell_size（格距固定 1 米，非等比缩放不受物理支持），2 米格距对不上，保留三角网格碰撞，等引擎升级后再换
 	mi.create_trimesh_collision()
 
 

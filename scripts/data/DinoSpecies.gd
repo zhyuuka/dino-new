@@ -4,6 +4,14 @@ extends RefCounted
 ## 设计参考《诅咒之岛》（The Cursed Dinosaur Isle）：每种恐龙有独特体型、属性与技能，
 ## 玩家开局可选物种，AI 也按物种构成真实食物链。
 
+## 物种 id 常量：与 assets/models/<id>.glb 文件名严格对应，禁止在业务代码里裸写
+const ID_RAPTOR := "raptor"
+const ID_TRIKE := "trike"
+const ID_TREX := "trex"
+const ID_ANKY := "anky"
+const ID_CARNO := "carno"
+const ID_GALLI := "galli"
+
 # --- 食性 ---
 enum Diet { CARNIVORE, HERBIVORE }
 
@@ -79,27 +87,27 @@ static func _build() -> void:
 	if not _db.is_empty():
 		return
 	var defs := [
-		SpeciesDef.new("raptor", "迅猛龙", Diet.CARNIVORE, ActiveAbility.NONE, PassiveAbility.PACK,
+		SpeciesDef.new(ID_RAPTOR, "迅猛龙", Diet.CARNIVORE, ActiveAbility.NONE, PassiveAbility.PACK,
 			70, 14, 7.5, 13.5, 0.4, 0.6,
 			Color(0.85, 0.45, 0.2), Color(0.55, 0.28, 0.1),
 			"敏捷小型掠食者，成群时凶猛，单体脆弱。"),
-		SpeciesDef.new("carno", "食肉牛龙", Diet.CARNIVORE, ActiveAbility.CHARGE, PassiveAbility.NONE,
+		SpeciesDef.new(ID_CARNO, "食肉牛龙", Diet.CARNIVORE, ActiveAbility.CHARGE, PassiveAbility.NONE,
 			140, 26, 6.5, 12.0, 0.6, 1.05,
 			Color(0.82, 0.3, 0.25), Color(0.5, 0.18, 0.15),
 			"中型猛兽，冲锋撞击伤害极高。"),
-		SpeciesDef.new("trex", "霸王龙", Diet.CARNIVORE, ActiveAbility.NONE, PassiveAbility.APEX,
+		SpeciesDef.new(ID_TREX, "霸王龙", Diet.CARNIVORE, ActiveAbility.NONE, PassiveAbility.APEX,
 			320, 55, 5.0, 9.5, 0.9, 1.7,
 			Color(0.4, 0.6, 0.3), Color(0.25, 0.4, 0.2),
 			"顶级掠食者，威压令小型肉食龙逃窜。"),
-		SpeciesDef.new("trike", "三角龙", Diet.HERBIVORE, ActiveAbility.CHARGE, PassiveAbility.DEFENSE,
+		SpeciesDef.new(ID_TRIKE, "三角龙", Diet.HERBIVORE, ActiveAbility.CHARGE, PassiveAbility.DEFENSE,
 			240, 22, 5.0, 9.0, 0.7, 1.45,
 			Color(0.45, 0.55, 0.7), Color(0.3, 0.38, 0.5),
 			"重甲草食，冲锋与防御兼备。"),
-		SpeciesDef.new("anky", "甲龙", Diet.HERBIVORE, ActiveAbility.NONE, PassiveAbility.DEFENSE,
+		SpeciesDef.new(ID_ANKY, "甲龙", Diet.HERBIVORE, ActiveAbility.NONE, PassiveAbility.DEFENSE,
 			260, 12, 4.0, 7.0, 0.8, 1.25,
 			Color(0.55, 0.55, 0.3), Color(0.38, 0.38, 0.2),
 			"移动堡垒，伤害减免极高，但速度慢。"),
-		SpeciesDef.new("galli", "似鸡龙", Diet.HERBIVORE, ActiveAbility.NONE, PassiveAbility.NONE,
+		SpeciesDef.new(ID_GALLI, "似鸡龙", Diet.HERBIVORE, ActiveAbility.NONE, PassiveAbility.NONE,
 			55, 6, 9.0, 16.0, 0.4, 0.55,
 			Color(0.8, 0.7, 0.45), Color(0.55, 0.48, 0.3),
 			"极速逃跑专家，脆皮但跑得飞快。"),

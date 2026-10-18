@@ -22,14 +22,14 @@ var is_being_destroyed: bool = false
 
 
 func _ready() -> void:
-	add_to_group("corpse")
+	add_to_group(Groups.CORPSE)
 	var b: Color = Color(0.5, 0.4, 0.3)
 	var d: Color = Color(0.3, 0.25, 0.15)
 	if species_colors.size() >= 2 and species_colors[0] is Color:
 		b = species_colors[0]
 		d = species_colors[1]
 	if species_id == "":
-		species_id = "raptor"
+		species_id = DinoSpecies.ID_RAPTOR
 	# 加载模型并放倒、变暗（尸体表现由 DinoVisual 处理）
 	dino_visual.setup(species_id, b, d, {"corpse": true})
 
