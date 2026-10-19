@@ -19,6 +19,7 @@ var species_colors: Array = []
 var bites_remaining: int = MAX_BITES
 var lifetime_timer: float = LIFETIME
 var is_being_destroyed: bool = false
+var is_dragged: bool = false            # 被玩家叼住拖拽中：暂停腐烂计时与淡出，且不可被进食
 
 
 func _ready() -> void:
@@ -34,8 +35,14 @@ func _ready() -> void:
 	dino_visual.setup(species_id, b, d, {"corpse": true})
 
 
+## 拖拽状态切换（由 PlayerDino 调用）：叼住期间暂停 35s 生存期计时，
+## 否则长距离拖拽会拖到一半蒸发；放下后恢复计时继续腐烂
+func set_dragged(on: bool) -> void:
+	is_dragged = on
+
+
 func _process(delta: float) -> void:
-	if is_being_destroyed:
+	if is_being_destroyed or is_dragged:
 		return
 	lifetime_timer -= delta
 	if lifetime_timer <= 0.0:
@@ -44,7 +51,8 @@ func _process(delta: float) -> void:
 
 ## 尝试吃尸体一口。成功返回 true
 func try_eat() -> bool:
-	if is_being_destroyed or bites_remaining <= 0:
+	# 被拖拽中的尸体不可进食（叼在玩家嘴里，AI 与玩家都无法下口）
+	if is_dragged or is_being_destroyed or bites_remaining <= 0:
 		return false
 	bites_remaining -= 1
 	dino_visual.pulse_damage()

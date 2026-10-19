@@ -1,0 +1,16 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/world/DinoEgg.gd" id="1_egg"]
+
+[sub_resource type="SphereMesh" id="mesh_egg"]
+radius = 0.32
+height = 0.5
+radial_segments = 16
+rings = 8
+
+[node name="DinoEgg" type="Node3D"]
+script = ExtResource("1_egg")
+
+[node name="EggMesh" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.26, 0)
+mesh = SubResource("mesh_egg")

@@ -19,6 +19,7 @@ signal died
 signal kill_made                      # 玩家击杀了一只 AI（用于计分）
 signal banner(text: String)           # 大字提示（成长 / 技能）
 signal hint(text: String)             # 上下文小提示（饮水等）
+signal egg_laid(egg: DinoEgg)         # 产下自己的蛋（代际机制，交 Main 挂树）
 
 # ---------- 由 Main 在 add_child 之前赋值 ----------
 var species_id: String = DinoSpecies.ID_RAPTOR
@@ -63,8 +64,23 @@ const DEFENSE_REDUCTION: float = 0.55    # 重甲：受到伤害 ×0.55
 const DRINK_RATE: float = 45.0           # 每秒回渴速度
 const DRINK_SLOW: float = 0.4            # 喝水时移动减速
 
+# 产蛋（代际机制）：在巢穴吃饱后产下自己的蛋，死亡后从蛋重生
+const EGG_SCENE: PackedScene = preload("res://scenes/DinoEgg.tscn")
+const LAY_HUNGER_MIN: int = 70           # 饥饿 > 70% 才产蛋
+const LAY_HUNGER_COST: int = 25          # 产蛋消耗的饥饿
+const LAY_COOLDOWN: float = 60.0         # 产蛋冷却（秒）
+const LAY_NEST_RADIUS: float = 10.0      # 巢穴判定半径（比巢穴回血半径宽）
+const NEST_SCAN_INTERVAL: float = 0.5    # 巢穴范围扫描节流（秒），不逐帧扫组
+
 const BITE_REACH: float = 3.4
 const BITE_COOLDOWN: float = 0.3
+
+# 尸体拖拽：按住咬键叼起附近尸体拖在身前（先出嘴再叼取；松开/再按/死亡即放下）
+const DRAG_PICKUP_RANGE: float = 3.5   # 叼取判定半径（米）
+const DRAG_DISTANCE: float = 2.2       # 叼住时尸体保持在身前的距离（米）
+const DRAG_STAMINA_MULT: float = 1.5   # 叼尸移动的体力消耗倍率（拖拽很费力）
+const DRAG_SCAN_INTERVAL: float = 0.2  # 叼取扫描节流（秒），不逐帧扫组
+
 const GRAVITY: float = 19.6
 
 # ---------- 运行时状态 ----------
@@ -108,12 +124,22 @@ var charge_timer: float = 0.0
 var charged_targets: Array = []
 var pack_bonus: bool = false
 
+# 尸体拖拽状态
+var _dragged_corpse: AICorpse = null   # 正在叼住的尸体（null = 未叼）
+var _touch_bite_hold: bool = false     # 触屏咬键长按电平（TouchControls.bite_hold_changed 桥接）
+var _bite_hold_consumed: bool = false  # 本次按住会话已叼过/已失效：防"放下后按住未松立刻重叼"
+var _drag_scan_timer: float = DRAG_SCAN_INTERVAL  # 叼取扫描节流计时（初值=首扫延迟：长按 0.2s 后才叼取，轻点咬击不误叼）
+var _terrain_ref: TerrainGenerator = null  # 地形引用缓存（Main 未注入本脚本，惰性按类型查找一次）
+
 # 衰减计时器
 var hunger_timer: float = 0.0
 var thirst_timer: float = 0.0
 var starve_timer: float = 0.0
 var thirst_starve_timer: float = 0.0
 var current_hint: String = ""
+var lay_cooldown_timer: float = 0.0      # 产蛋冷却倒计时
+var _nest_scan_timer: float = 0.0        # 巢穴扫描节流
+var _was_in_nest: bool = false           # 上一扫描点是否在巢穴范围（沿触发提示）
 
 # 派生属性（受物种 + 成长影响）
 var bite_damage: int = 10
@@ -211,7 +237,14 @@ func _unhandled_input(event: InputEvent) -> void:
 	if is_dead:
 		return
 	if event.is_action_pressed("bite"):
-		try_bite()
+		if _dragged_corpse != null:
+			# 实现选择：叼住状态下按咬键优先执行"放下"而非出嘴——
+			# 长按语义下"按住+有尸体=拖"，叼住仍出嘴会"既咬又拖"（还会咬中自己叼的尸体）；
+			# 置 consumed 防止按住未松时放下又被自动重叼，需松开重按
+			_drop_corpse()
+			_bite_hold_consumed = true
+		else:
+			try_bite()
 	elif event.is_action_pressed("jump"):
 		try_jump()
 
@@ -239,6 +272,12 @@ func _physics_process(delta: float) -> void:
 	var move_dir: Vector3 = (forward * -input_dir.y + right * input_dir.x)
 	if move_dir.length() > 0.01:
 		move_dir = move_dir.normalized()
+
+	# 咬键长按电平：触屏桥接 + 键盘 action 电平，两路输入统一驱动叼尸/拖拽
+	var bite_held: bool = _touch_bite_hold or Input.is_action_pressed("bite")
+	if not bite_held:
+		_bite_hold_consumed = false
+	_update_dragging(delta, bite_held)
 
 	# 体力与冲刺
 	_update_stamina(delta, move_dir.length() > 0.1)
@@ -300,6 +339,8 @@ func _physics_process(delta: float) -> void:
 			is_biting = false
 	if charge_cooldown_timer > 0.0:
 		charge_cooldown_timer -= delta
+	if lay_cooldown_timer > 0.0:
+		lay_cooldown_timer -= delta
 
 	# 摄像机旋转 Q/E（桌面）或触屏拖动（手机）
 	var yaw_input: float = 0.0
@@ -324,7 +365,10 @@ func _physics_process(delta: float) -> void:
 # ================= 体力 =================
 func _update_stamina(delta: float, moving: bool) -> void:
 	var sprinting: bool = Input.is_action_pressed("sprint") and moving and can_sprint()
-	if sprinting:
+	# 叼住尸体移动：体力按 1.5 倍速率流失（走/跑同款倍率，拖拽很费力）；原地叼住按常规回复
+	if _dragged_corpse != null and moving:
+		current_stamina = maxi(0, current_stamina - int(STAMINA_DRAIN * DRAG_STAMINA_MULT * delta))
+	elif sprinting:
 		current_stamina = maxi(0, current_stamina - int(STAMINA_DRAIN * delta))
 	else:
 		current_stamina = mini(current_stamina + int(STAMINA_REGEN * delta), STAMINA_MAX)
@@ -462,6 +506,83 @@ func apply_buff(dur: float, spd: float, dmg: float) -> void:
 	buff_dmg_mult = dmg
 
 
+# ================= 尸体拖拽 =================
+## 触屏咬键长按电平（由 TouchControls.bite_hold_changed 反向接线调用）；松开即放下
+func set_bite_hold(held: bool) -> void:
+	_touch_bite_hold = held
+	if not held:
+		_drop_corpse()
+
+
+## 每物理帧驱动拖拽：叼住时把尸体拉到身前贴地；未叼住且咬键按住时节流扫描可叼尸体
+func _update_dragging(delta: float, bite_held: bool) -> void:
+	if _dragged_corpse != null:
+		# 键盘路径松开咬键即放下（触屏路径已由 set_bite_hold(false) 在事件层放下），与叼取时的提示文案一致
+		if not bite_held:
+			_drop_corpse()
+			return
+		if is_instance_valid(_dragged_corpse):
+			# 尸体固定在身前 2.2m，y 经地形高度贴地（静止时同样保持在前方）
+			var fwd: Vector3 = -global_transform.basis.z
+			fwd.y = 0.0
+			fwd = fwd.normalized()
+			var pos: Vector3 = global_position + fwd * DRAG_DISTANCE
+			pos.y = _ground_y(pos.x, pos.z)
+			_dragged_corpse.global_position = pos
+		else:
+			_dragged_corpse = null
+		return
+	# 叼取判定：咬键先出嘴（键盘边沿在 _unhandled_input，触屏点按经 bite_pressed 桥接
+	# try_bite），电平叼取需持续按住 0.2s（首扫延迟）后才发生——轻点只咬不叼，长按才叼取
+	if not bite_held or _bite_hold_consumed:
+		return
+	_drag_scan_timer -= delta
+	if _drag_scan_timer > 0.0:
+		return
+	_drag_scan_timer = DRAG_SCAN_INTERVAL
+	var best: AICorpse = null
+	var best_d: float = DRAG_PICKUP_RANGE
+	for n in get_tree().get_nodes_in_group(Groups.CORPSE):
+		var c := n as AICorpse
+		if c == null or not is_instance_valid(c):
+			continue
+		var d: float = global_position.distance_to(c.global_position)
+		if d < best_d:
+			best_d = d
+			best = c
+	if best != null:
+		_dragged_corpse = best
+		best.set_dragged(true)
+		_bite_hold_consumed = true   # 本次按住只叼一次：点按放下后不会立刻自动重叼
+		banner.emit("叼起了尸体")
+		hint.emit("松开咬键放下尸体；再按咬键也可放下")
+
+
+## 放下尸体（松开咬键 / 叼住时再按咬键 / 死亡），恢复其腐烂计时
+func _drop_corpse() -> void:
+	if _dragged_corpse != null and is_instance_valid(_dragged_corpse):
+		_dragged_corpse.set_dragged(false)
+		# 放下即收嘴：占住一次常规咬击冷却。触屏"松开放下"时 Button 会同帧补发
+		# bite_pressed（try_bite），不占冷却会把刚放下的尸体当场咬掉一口；
+		# 键盘侧 0.3s 即常规咬击间隔，无手感差异
+		bite_cooldown_timer = maxf(bite_cooldown, BITE_COOLDOWN)
+	_dragged_corpse = null
+
+
+## 地形高度查询：Main 未给本脚本注入地形引用，惰性按类型在主场景树中查找一次并缓存
+## （仅首次叼尸时有一次遍历开销；失败退回玩家自身高度，不阻塞拖拽）
+func _ground_y(x: float, z: float) -> float:
+	if _terrain_ref == null or not is_instance_valid(_terrain_ref):
+		var scene_root: Node = get_tree().current_scene
+		if scene_root != null:
+			var found: Array[Node] = scene_root.find_children("*", "TerrainGenerator", true, false)
+			if not found.is_empty():
+				_terrain_ref = found[0] as TerrainGenerator
+	if _terrain_ref != null and is_instance_valid(_terrain_ref):
+		return _terrain_ref.get_height(x, z)
+	return global_position.y
+
+
 ## 巢穴回体力（夹取并广播）
 func restore_stamina(amt: int) -> void:
 	current_stamina = mini(current_stamina + amt, STAMINA_MAX)
@@ -550,6 +671,55 @@ func _add_growth_meal() -> void:
 	_growth_signal()
 
 
+# ================= 产蛋（代际机制） =================
+## 巢穴语境：0.5s 节流扫描 NEST 类资源点。进入范围时提示玩法；
+## 条件齐备（范围内 + 饥饿 > 70% + 冷却结束）自动产下自己的蛋。
+func _update_nest_context(delta: float) -> void:
+	if is_dead:
+		return
+	_nest_scan_timer -= delta
+	if _nest_scan_timer > 0.0:
+		return
+	_nest_scan_timer = NEST_SCAN_INTERVAL
+	var in_nest: bool = _nearest_nest_distance() <= LAY_NEST_RADIUS
+	if in_nest and not _was_in_nest:
+		hint.emit("在巢穴吃饱后可以产蛋")
+	_was_in_nest = in_nest
+	if in_nest:
+		_try_lay_egg()
+
+
+## 最近 NEST 类资源点的平面距离（场上无巢穴返回 INF）
+func _nearest_nest_distance() -> float:
+	var best: float = INF
+	for n in get_tree().get_nodes_in_group(Groups.RESOURCE):
+		var rp := n as ResourcePoint
+		if rp == null or rp.point_type != ResourcePoint.Type.NEST:
+			continue
+		var d: float = Vector2(global_position.x - rp.global_position.x, global_position.z - rp.global_position.z).length()
+		best = minf(best, d)
+	return best
+
+
+## 产蛋：扣 25 点饥饿，蛋带当前成长阶段快照（死亡重开时取“蛋快照与存档较大者”），
+## 经 egg_laid 信号交 Main 挂树；首次产蛋解锁成就（unlock 幂等，无需判重）。
+func _try_lay_egg() -> void:
+	if lay_cooldown_timer > 0.0 or current_hunger <= LAY_HUNGER_MIN:
+		return
+	lay_cooldown_timer = LAY_COOLDOWN
+	current_hunger = maxi(0, current_hunger - LAY_HUNGER_COST)
+	hunger_changed.emit(current_hunger, HUNGER_MAX)
+	var egg := EGG_SCENE.instantiate() as DinoEgg
+	egg.species_id = species.id
+	egg.owner_player = true
+	egg.growth_stage_snapshot = growth_stage
+	# 放脚下：蛋尚未入树，直接设局部位置（dynamic 容器为原点恒等变换，局部即世界坐标）
+	egg.position = global_position
+	egg_laid.emit(egg)
+	banner.emit("你产下了一枚蛋，它将延续你的血脉")
+	Achievements.unlock("nest_first")
+
+
 # ================= 受伤 / 死亡 =================
 func take_damage(amount: int, attacker: Node = null) -> void:
 	if is_dead:
@@ -577,6 +747,7 @@ func _die() -> void:
 	if is_dead:
 		return
 	is_dead = true
+	_drop_corpse()   # 死亡叼不住：尸体落地并恢复其腐烂计时
 	remove_from_group(Groups.PLAYER)
 	died.emit()
 	dino_visual.shrink_death()
@@ -664,3 +835,4 @@ func _play_glow() -> void:
 
 func _process(delta: float) -> void:
 	_update_pack()
+	_update_nest_context(delta)

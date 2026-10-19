@@ -5,6 +5,7 @@ extends CanvasLayer
 
 signal move_input_changed(vec: Vector2)
 signal bite_pressed
+signal bite_hold_changed(holding: bool)   # 咬键长按电平(button_down/up 驱动),供玩家叼尸拖拽
 signal jump_pressed
 signal ability_pressed
 signal drink_pressed(held: bool)
@@ -29,6 +30,15 @@ func _ready() -> void:
 	add_child(sfx)
 	joystick.input_changed.connect(_on_joystick_input)
 	bite_button.pressed.connect(func(): _ui(); bite_pressed.emit())
+	# 咬键补长按语义:与饮水键同款 button_down/up 电平驱动,供"按住叼尸拖拽"
+	bite_button.button_down.connect(func(): _ui(); bite_hold_changed.emit(true))
+	bite_button.button_up.connect(func(): bite_hold_changed.emit(false))
+	# 长按电平反向接线:Main 编排器只桥接离散动作信号(bite_pressed 等),
+	# 电平信号由控件侧直连玩家——玩家先于触屏层入树,此处必能找到;
+	# 死亡重开时两者一同重建,连接随之刷新,不会残留旧引用
+	var p := get_tree().get_first_node_in_group(Groups.PLAYER) as PlayerDino
+	if p != null:
+		bite_hold_changed.connect(p.set_bite_hold)
 	jump_button.pressed.connect(func(): _ui(); jump_pressed.emit())
 	ability_button.pressed.connect(func(): _ui(); ability_pressed.emit())
 	drink_button.button_down.connect(func(): _ui(); drink_pressed.emit(true))

@@ -9,6 +9,7 @@ extends CharacterBody3D
 ## 物理层 layer 3 (AI)，collision_mask = layer 1 (World) + layer 2 (Player)
 
 signal died(node: AIDino, by_player: bool)
+signal egg_laid(egg: DinoEgg)
 
 # 由 Main 在 add_child 之前赋值
 var species_id: String = DinoSpecies.ID_RAPTOR
@@ -31,6 +32,21 @@ const DRINK_RATE: float = 40.0
 const DECISION_INTERVAL: float = 0.25
 const AGGRO_DURATION: float = 6.0          # 受击仇恨持续时间(秒)
 const ATTACK_ANIM_THROTTLE: float = 1.0    # 攻击动画节流:同一目标 1 秒内不重复触发
+
+# 领地系统:成年 AI 以落位为家盘踞一地;数值均为距 _home_pos 的半径(米)
+const HOME_WANDER_RADIUS: float = 40.0     # 领地游荡半径:游荡不出 home 40m,跑出边缘即调头回家
+const HOME_DEFENSE_RADIUS: float = 25.0    # 领地防御半径:肉食成年对进入 [home 25m] 且打得过者主动攻击
+const HOME_FLEE_RADIUS: float = 12.0       # 草食领地警觉半径:肉食者进入 [home 12m] 提前逃跑(比 25m 被动感知更警觉)
+
+# 繁殖产蛋:吃得饱 + 成年 + 巢穴附近才繁殖;蛋经 egg_laid 信号交 Main 挂树(AI 不持有 Main 引用)
+const EGG_SCENE: PackedScene = preload("res://scenes/DinoEgg.tscn")
+const LAY_HUNGER_MIN: int = 55             # 饥饿高于该值(吃得饱)才产蛋
+const LAY_STAGE_MIN: int = 1               # 幼体不繁殖,成长阶段 ≥1(少年)才产蛋
+const LAY_NEST_RADIUS: float = 10.0        # 距 NEST 类资源点的判定半径(米)
+const LAY_COOLDOWN: float = 90.0           # 自身产蛋冷却(秒)
+const LAY_MAX_EGGS: int = 10               # 全场蛋数上限(含玩家蛋)
+const EGG_BITE_HUNGER: int = 10            # 偷蛋每口回复饥饿(蛋 2 口破)
+const EGG_BITE_HEAL: int = 2               # 偷蛋每口回复血量
 
 const AI_MEAT_HUNGER: int = 30
 const AI_MEAT_HEAL: int = 10
@@ -60,6 +76,7 @@ var thirst_timer: float = 0.0
 var starve_timer: float = 0.0
 var decision_timer: float = 0.0
 var attack_timer: float = 0.0
+var lay_cooldown_timer: float = 0.0        # 产蛋冷却倒计时
 var wander_timer: float = 0.0
 var wander_dir: Vector3 = Vector3.ZERO
 var wander_min_pause: float = 1.0
@@ -77,6 +94,10 @@ var _aggro_timer: float = 0.0
 # 攻击动画节流:记录最近一次触发的目标与剩余冷却
 var _attack_anim_target: Node = null
 var _attack_anim_timer: float = 0.0
+# 领地:成年个体落位后记录的家(_ready 时尚未落位,延迟到首个物理帧登记);Boss 全域巡游不设领地
+var _home_pos: Vector3 = Vector3.ZERO
+var _has_home: bool = false
+var _home_recorded: bool = false
 
 @onready var state_controller: StateController = $StateController
 @onready var dino_visual: DinoVisual = $DinoVisual
@@ -110,6 +131,11 @@ func _apply_stats() -> void:
 func _physics_process(delta: float) -> void:
 	if is_dead:
 		return
+	# 领地登记:落位最终位置由生成方在 add_child 之后设置,_ready 时还未落位,
+	# 故延迟到首个物理帧以"现有落位最终位置"为家
+	if not _home_recorded:
+		_home_recorded = true
+		_record_home()
 	if not is_on_floor():
 		velocity.y -= GRAVITY * delta
 
@@ -124,6 +150,8 @@ func _physics_process(delta: float) -> void:
 		attack_timer -= delta
 	if _attack_anim_timer > 0.0:
 		_attack_anim_timer -= delta
+	if lay_cooldown_timer > 0.0:
+		lay_cooldown_timer -= delta
 
 	_update_vitals(delta)
 	_clamp_to_map()
@@ -150,6 +178,20 @@ func _decide() -> void:
 			flee_target = _aggro_target
 			state_controller.transition_to(StateController.State.FLEE)
 			return
+	# 领地防御(与仇恨互斥:仍有报复目标时跳过;本函数每 DECISION_INTERVAL 才跑一次,
+	# 侵入扫描天然并入 0.25s 决策节流,不逐帧扫组)
+	if _aggro_target == null and _has_home:
+		var intruder: Node3D = _find_home_intruder()
+		if intruder != null:
+			if species.diet == DinoSpecies.Diet.CARNIVORE:
+				# 肉食成年:闯入 [home 25m] 且打得过的,咬
+				hunt_target = intruder
+				state_controller.transition_to(StateController.State.HUNT)
+			else:
+				# 草食:肉食者逼近 [home 12m],抢在被动感知之前先逃
+				flee_target = intruder
+				state_controller.transition_to(StateController.State.FLEE)
+			return
 	var threat: Node3D = _find_threat()
 	if threat != null:
 		flee_target = threat
@@ -168,6 +210,8 @@ func _decide() -> void:
 			if _cached_water != null:
 				state_controller.transition_to(StateController.State.DRINK)
 				return
+		# 繁殖判定挂在漫游决策层（_decide 每 0.25s 一次，巢穴/蛋数扫描天然节流）
+		_try_lay_egg()
 		state_controller.transition_to(StateController.State.WANDER)
 	else:
 		if current_hunger < 55:
@@ -181,6 +225,8 @@ func _decide() -> void:
 			if _cached_water != null:
 				state_controller.transition_to(StateController.State.DRINK)
 				return
+		# 繁殖判定挂在漫游决策层（_decide 每 0.25s 一次，巢穴/蛋数扫描天然节流）
+		_try_lay_egg()
 		state_controller.transition_to(StateController.State.WANDER)
 
 
@@ -196,6 +242,49 @@ func _prey_weak(prey: Node3D) -> bool:
 func _clear_aggro() -> void:
 	_aggro_target = null
 	_aggro_timer = 0.0
+
+
+# ================= 领地 =================
+## 领地登记:成年 AI(成长阶段 ≥1)以落位最终位置为家盘踞一地;
+## Boss(满级霸王龙)全域巡游不设领地,幼体(<1)无领地
+func _record_home() -> void:
+	if growth_stage < 1 or _is_boss():
+		return
+	_home_pos = global_position
+	_has_home = true
+
+
+## Boss 判定:满级霸王龙(传说霸主由 EcosystemDirector._spawn_boss 以 MAX_STAGE 阶段生成)
+func _is_boss() -> bool:
+	return species.id == DinoSpecies.ID_TREX and growth_stage >= DinoSpecies.MAX_STAGE
+
+
+## 家园侵入者检查(仅由 _decide 调用,天然 0.25s 决策节流,不逐帧扫组):
+## - 肉食(有领地者必为成年):玩家或 AI 进入 [home 25m] 且打得过
+##   (复用 _can_beat_attacker 的 ×0.9 体型阈值)→ 返回,进 HUNT;打不过不设防,交给常规威胁检查兜底
+## - 草食:肉食个体(玩家或 AI)进入 [home 12m] → 返回,提前 FLEE;同类草食串门不算侵入
+func _find_home_intruder() -> Node3D:
+	var carnivore: bool = species.diet == DinoSpecies.Diet.CARNIVORE
+	var best_d: float = HOME_DEFENSE_RADIUS if carnivore else HOME_FLEE_RADIUS
+	var best: Node3D = null
+	for n in get_tree().get_nodes_in_group(Groups.AI):
+		if n == self or not is_instance_valid(n):
+			continue
+		var other: AIDino = n as AIDino
+		if other.is_dead or (not carnivore and other.species.diet != DinoSpecies.Diet.CARNIVORE):
+			continue
+		var d: float = _home_pos.distance_to(other.global_position)
+		var hostile: bool = (not carnivore) or _can_beat_attacker(other)
+		if d < best_d and hostile:
+			best_d = d
+			best = other
+	var p: PlayerDino = _player()
+	if p != null and not p.is_dead and (carnivore or p.is_carnivore()):
+		var d: float = _home_pos.distance_to(p.global_position)
+		var hostile: bool = (not carnivore) or _can_beat_attacker(p)
+		if d < best_d and hostile:
+			best = p
+	return best
 
 
 ## 目标是否已死亡(尸体等其他类型不算)
@@ -243,6 +332,13 @@ func _wander(delta: float) -> void:
 		else:
 			var angle: float = randf() * TAU
 			wander_dir = Vector3(sin(angle), 0.0, cos(angle))
+			# 领地游荡偏向:有家的个体目标点取 home 半径 40m 内——
+			# 跑出领地边缘即调头回家,否则照常在家附近随机踱步,个体天然盘踞一地
+			if _has_home:
+				var to_home: Vector3 = _home_pos - global_position
+				to_home.y = 0.0
+				if to_home.length() > HOME_WANDER_RADIUS:
+					wander_dir = to_home.normalized()
 			# 草食龙：向同伴群中心轻微偏移，形成兽群
 			if species.diet == DinoSpecies.Diet.HERBIVORE:
 				var herd: Vector3 = _herd_center()
@@ -278,6 +374,14 @@ func _hunt(delta: float) -> void:
 				_eat(AI_MEAT_HUNGER, AI_MEAT_HEAL)
 			else:
 				# 尸体已空/淡出中:放弃猎物回漫游,不再原地空咬
+				hunt_target = null
+				state_controller.transition_to(StateController.State.WANDER)
+		elif hunt_target is DinoEgg:
+			# 掠食者偷蛋:血量 2 口,每口小收益,蛋破即消失(AI 蛋不再孵化,玩家蛋被偷则失去重生锚点)
+			var egg: DinoEgg = hunt_target as DinoEgg
+			egg.take_damage(1, self)
+			_eat(EGG_BITE_HUNGER, EGG_BITE_HEAL)
+			if egg.hp <= 0:
 				hunt_target = null
 				state_controller.transition_to(StateController.State.WANDER)
 
@@ -358,6 +462,40 @@ func _eat(hunger_amt: int, heal_amt: int) -> void:
 # 草食 AI 被植物碰到时调用（由 Foliage 触发）
 func on_eat_plant() -> void:
 	_eat(AI_PLANT_HUNGER, AI_PLANT_HEAL)
+
+
+# ================= 繁殖（产蛋） =================
+## 繁殖判定：仅在 GRAZE/WANDER 决策层调用（由 _decide 每 0.25s 触发一次，
+## 巢穴/蛋数扫描天然节流，不逐帧扫组）。条件齐备即在脚下产蛋，
+## 蛋实例经 egg_laid 信号交 Main 挂树，AI 不持有 Main 引用。
+func _try_lay_egg() -> void:
+	if lay_cooldown_timer > 0.0:
+		return
+	if current_hunger <= LAY_HUNGER_MIN or growth_stage < LAY_STAGE_MIN:
+		return
+	if get_tree().get_nodes_in_group(Groups.EGG).size() >= LAY_MAX_EGGS:
+		return
+	if _nearest_nest_distance() > LAY_NEST_RADIUS:
+		return
+	lay_cooldown_timer = LAY_COOLDOWN
+	var egg := EGG_SCENE.instantiate() as DinoEgg
+	egg.species_id = species.id
+	egg.owner_player = false
+	# 放脚下：蛋尚未入树，直接设局部位置（dynamic 容器为原点恒等变换，局部即世界坐标）
+	egg.position = global_position
+	egg_laid.emit(egg)
+
+
+## 最近 NEST 类资源点的平面距离（场上无巢穴返回 INF）
+func _nearest_nest_distance() -> float:
+	var best: float = INF
+	for n in get_tree().get_nodes_in_group(Groups.RESOURCE):
+		var rp := n as ResourcePoint
+		if rp == null or rp.point_type != ResourcePoint.Type.NEST:
+			continue
+		var d: float = Vector2(global_position.x - rp.global_position.x, global_position.z - rp.global_position.z).length()
+		best = minf(best, d)
+	return best
 
 
 # ================= 受伤 / 死亡 =================
@@ -483,6 +621,13 @@ func _find_prey() -> Node3D:
 			if d < best_d:
 				best_d = d
 				best = c as Node3D
+	# 掠食者偷蛋:饿着肚子的肉食龙也盯上蛋(孵化前下口,含玩家巢边的蛋——护巢有理)
+	for e in get_tree().get_nodes_in_group(Groups.EGG):
+		if is_instance_valid(e):
+			var d: float = global_position.distance_to((e as Node3D).global_position)
+			if d < best_d:
+				best_d = d
+				best = e as Node3D
 	var p: PlayerDino = _player()
 	if p != null and not p.is_dead:
 		var edible: bool = (not p.is_carnivore()) or (p.get_size() < current_size * 0.9)

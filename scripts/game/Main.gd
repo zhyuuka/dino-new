@@ -70,6 +70,7 @@ func _ready() -> void:
 	director.setup(null, PLAYER_SPAWN, _map_radius, dynamic)
 	director.ai_died.connect(_on_ai_died)
 	director.boss_spawned.connect(_on_boss_spawned)
+	director.ai_egg_laid.connect(_on_ai_egg_laid)
 	add_child(director)
 
 	# 环境风声（循环）
@@ -158,9 +159,14 @@ func _start_game(species_id: String, is_continue: bool) -> void:
 	hud.show_hint("管理好饥饿/口渴/体力。靠近湖泊按 E 或饮水键喝水，吃对的食物会成长。")
 	hud.show_help()
 
+	# 新手引导（自接线节点）：Main 侧只需挂一次，其余由节点自己完成——
+	# 0.5s 周期扫描自动发现/重连玩家与 HUD（死亡重开重建后同样跟随）；
+	# 引导已完成（Achievements 跨局存档标记）时其 _ready 内自毁，挂载零成本
+	add_child(TutorialGuide.new())
+
 
 # ================= 玩家 / HUD / 触屏 =================
-func _spawn_player(species_id: String, stage: int, gen: int) -> void:
+func _spawn_player(species_id: String, stage: int, gen: int, at: Vector3 = PLAYER_SPAWN) -> void:
 	player = PlayerScene.instantiate() as PlayerDino
 	player.species_id = species_id
 	player.start_growth_stage = stage
@@ -175,9 +181,10 @@ func _spawn_player(species_id: String, stage: int, gen: int) -> void:
 	player.banner.connect(_on_player_banner)
 	player.hint.connect(_on_player_hint)
 	player.died.connect(_on_player_died)
+	player.egg_laid.connect(_on_player_egg_laid)
 	dynamic.add_child(player)
-	var py: float = terrain.get_height(PLAYER_SPAWN.x, PLAYER_SPAWN.z) if terrain != null else PLAYER_SPAWN.y
-	player.global_position = Vector3(PLAYER_SPAWN.x, py + 0.2, PLAYER_SPAWN.z)
+	var py: float = terrain.get_height(at.x, at.z) if terrain != null else at.y
+	player.global_position = Vector3(at.x, py + 0.2, at.z)
 
 
 func _spawn_hud() -> void:
@@ -192,8 +199,8 @@ func _spawn_random_events() -> void:
 	random_events.director = director
 	random_events.day_night = day_night
 	random_events.foliage_spawner = foliage_spawner
-	random_events.event_started.connect(hud.show_banner)
-	random_events.event_ended.connect(hud.show_banner)
+	random_events.event_started.connect(_on_event_started)
+	random_events.event_ended.connect(_on_event_ended)
 	add_child(random_events)
 
 
@@ -210,6 +217,37 @@ func _spawn_touch_controls() -> void:
 	player.camera_mode_changed.connect(func(n: String): hud.show_hint("视角：" + n))
 	if player != null and is_instance_valid(player):
 		touch_controls.set_ability_visible(player.has_charge_ability())
+
+
+# ================= 蛋 / 代际 =================
+## AI 产蛋：挂到动态容器并接孵化回调。bind 把蛋引用追加在信号参数之后，
+## 便于孵化成败回传：成功销毁蛋壳，满员让蛋自行延时重试（蛋只管计时与信号）
+func _on_ai_egg_laid(egg: DinoEgg) -> void:
+	dynamic.add_child(egg)
+	egg.hatched.connect(_on_egg_hatched.bind(egg))
+
+
+## AI 蛋孵化请求：生态未满 → 落地幼体并销毁蛋；满员 → 通知蛋延时 20s 重试
+func _on_egg_hatched(species_id: String, pos: Vector3, egg: DinoEgg) -> void:
+	if director.hatch_ai(species_id, pos):
+		egg.queue_free()
+	else:
+		egg.notify_hatch_failed()
+
+
+## 玩家产蛋：挂到动态容器。蛋是“跨代”资产：_restart_run 的释放清单不动蛋，
+## 玩家死亡后从自己的蛋重生（见 _restart_run 第 3.5 步）
+func _on_player_egg_laid(egg: DinoEgg) -> void:
+	dynamic.add_child(egg)
+
+
+## 找一枚玩家自己的蛋（跨代重生锚点；多枚时取先扫到的一枚）
+func _find_player_egg() -> DinoEgg:
+	for n in get_tree().get_nodes_in_group(Groups.EGG):
+		var e := n as DinoEgg
+		if e != null and e.owner_player:
+			return e
+	return null
 
 
 # ================= 信号 =================
@@ -229,6 +267,11 @@ func _on_player_growth_changed(stage: int, name: String, progress: float) -> voi
 	hud.set_growth(stage, name, progress)
 	if player != null:
 		hud.set_species(player.species.name, player.species.diet_text(), name)
+	# 成就：进化里程碑（unlock 幂等；开局带存档阶段触发同样成立）
+	if stage >= 2:
+		Achievements.unlock("evolution_2")
+	if stage >= DinoSpecies.MAX_STAGE:
+		Achievements.unlock("evolution_max")
 
 func _on_player_banner(text: String) -> void:
 	hud.show_banner(text)
@@ -242,6 +285,21 @@ func _on_player_hint(text: String) -> void:
 ## 传说霸主登场横幅（由 EcosystemDirector 发出 boss_spawned 时显示）
 func _on_boss_spawned() -> void:
 	hud.show_banner("传说霸主 · 霸王龙出没！")
+
+
+## 随机事件横幅转发 + 见证类成就。RandomEvents 的 event_started/ended 信号只携带文案、
+## 未暴露 kind，故按各事件 start/end 处理函数返回文案的前缀判定类型
+## （"一群"=兽群迁徙开场，"风暴平息"=风暴收场，见 RandomEvents._event_catalog）。
+func _on_event_started(text: String) -> void:
+	hud.show_banner(text)
+	if text.begins_with("一群"):
+		Achievements.unlock("herd_witness")   # 兽群迁徙开场 = 见证兽群
+
+
+func _on_event_ended(text: String) -> void:
+	hud.show_banner(text)
+	if text.begins_with("风暴平息"):
+		Achievements.unlock("storm_survivor") # 风暴收场 = 活过风暴
 
 
 func _on_player_died() -> void:
@@ -264,7 +322,8 @@ func _on_player_died() -> void:
 
 
 ## 死亡重开：只释放并重建"运行期"节点（玩家/AI/HUD/触屏/尸体/选图选种残留），
-## 保留世界资产（地形、水源、植被、资源点、树石、环境音），成长按存档续代
+## 保留世界资产（地形、水源、植被、资源点、树石、环境音）与蛋（Groups.EGG，跨代资产）；
+## 有玩家蛋则从蛋中重生（代际），无则按存档续代
 func _restart_run() -> void:
 	# 1) 先释放运行期节点，再重建（全部为 instantiate 新实例，信号连接不会重复）
 	if player != null:
@@ -298,9 +357,19 @@ func _restart_run() -> void:
 	var sid: String = d.get("species_id", DinoSpecies.ID_RAPTOR)
 	var stage: int = d.get("growth_stage", 0)
 	var gen: int = d.get("generation", 1)
+	# 3.5) 跨代重生：上一代留下的玩家蛋还在 → 从蛋的位置出生，
+	#      成长取“蛋快照与存档较大者”（蛋快照早于死亡存档时以存档为准）
+	var egg := _find_player_egg()
+	var spawn_pos: Vector3 = PLAYER_SPAWN
+	if egg != null:
+		spawn_pos = egg.global_position
+		stage = maxi(stage, egg.growth_stage_snapshot)
 	# 4) 复用现成生成函数重建运行期角色与 UI（顺序与 _start_game 一致）
 	_spawn_hud()
-	_spawn_player(sid, stage, gen)
+	_spawn_player(sid, stage, gen, spawn_pos)
+	if egg != null:
+		egg.queue_free()  # 蛋已孵化出“你”：消费这枚跨代资产
+		hud.show_banner("从蛋中诞生！第 %d 代" % gen)
 	director.spawn_roster(stage)
 	_spawn_random_events()
 	_spawn_touch_controls()
@@ -316,6 +385,10 @@ func _on_ai_died(ai: AIDino, by_player: bool) -> void:
 	corpse.global_position = ai.global_position
 	if by_player:
 		score_keeper.record_kill()
+		# 成就：首杀与十杀（kill_count 只在此处变化，就地判定；unlock 幂等，无需判重）
+		Achievements.unlock("first_kill")
+		if score_keeper.kill_count >= 10:
+			Achievements.unlock("kills_10")
 
 
 func _on_menu() -> void:
@@ -333,6 +406,9 @@ func _process(delta: float) -> void:
 		# hud 在选图/选种界面期间尚未生成，需判空
 		if hud != null:
 			hud.set_score(int(score_keeper.survival_time), score_keeper.kill_count, gen)
+		# 成就：存活满 5 分钟（随计分 tick 判定；unlock 幂等）
+		if score_keeper.survival_time >= 300.0:
+			Achievements.unlock("survival_300")
 	# 昼夜循环
 	day_night.update(delta)
 	# 生态维护：种群补员与传说霸主重生

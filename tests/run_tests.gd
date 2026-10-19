@@ -38,6 +38,8 @@ func _test_groups() -> void:
 	check(Groups.PLANT == "plant", "Groups.PLANT 应为 plant")
 	check(Groups.WATER == "water", "Groups.WATER 应为 water")
 	check(Groups.RESOURCE == "resource", "Groups.RESOURCE 应为 resource")
+	check(Groups.EGG == "egg", "Groups.EGG 应为 egg")
+	check(Groups.HUD == "hud", "Groups.HUD 应为 hud")
 
 
 # --- Maps：地图预设库 --------------------------------------------------------

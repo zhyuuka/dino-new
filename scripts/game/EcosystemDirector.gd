@@ -5,6 +5,7 @@ extends Node
 
 signal ai_died(ai: AIDino, by_player: bool)
 signal boss_spawned
+signal ai_egg_laid(egg: DinoEgg)   # AI 产蛋转发（Main 订阅后挂树并接孵化回调，AI 不持有 Main 引用）
 
 const AIScene: PackedScene = preload("res://scenes/AIDino.tscn")
 const TARGET_POP: int = 12
@@ -103,6 +104,15 @@ func spawn_herd(species_id: String, count: int) -> void:
 		_spawn_ai_at(species_id, _random_ai_stage(0), pos)
 
 
+## 蛋孵化落地：种群未达上限（目标 + 2）时在蛋的位置生成幼体并返回 true；
+## 满员返回 false，由 Main 通知蛋侧延时重试（蛋只管计时与信号，满员判定在生态侧）
+func hatch_ai(species_id: String, pos: Vector3, stage: int = 0) -> bool:
+	if ai_dinos.size() >= TARGET_POP + 2:
+		return false
+	_spawn_ai_at(species_id, stage, pos)
+	return true
+
+
 ## 传说霸主：地图上持续游荡的顶级霸王龙（最高成长阶段），作为世界级威胁
 func _spawn_boss() -> void:
 	var ai: AIDino = AIScene.instantiate() as AIDino
@@ -168,4 +178,10 @@ func _spawn_ai_at(species_id: String, stage: int, pos: Vector3) -> void:
 	var ay: float = _terrain.get_height(pos.x, pos.z) if _terrain != null else 1.5
 	ai.global_position = Vector3(pos.x, ay + 0.2, pos.z)
 	ai.died.connect(handle_ai_death)
+	ai.egg_laid.connect(_forward_ai_egg_laid)
 	ai_dinos.append(ai)
+
+
+## 转发 AI 产蛋信号（Main 订阅 ai_egg_laid 挂树；补员与兽群个体同经 _spawn_ai_at 生成，无需单独接线）
+func _forward_ai_egg_laid(egg: DinoEgg) -> void:
+	ai_egg_laid.emit(egg)

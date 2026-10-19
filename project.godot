@@ -120,3 +120,9 @@ textures/vram_compression/import_etc2_astc=true
 
 GameState="*res://scripts/core/GameState.gd"
 AudioManager="*res://scripts/core/AudioManager.gd"
+Achievements="*res://scripts/data/Achievements.gd"
+
+[debug]
+
+file_logging/enable_file_logging=true
+file_logging/max_log_files=5
