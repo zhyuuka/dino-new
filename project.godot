@@ -11,7 +11,7 @@ config/description="3D 开放世界恐龙生存游戏 - Phase 1"
 run/main_scene="res://scenes/Main.tscn"
 config/features=PackedStringArray("4.4", "Forward Plus")
 config/icon="res://assets/icons/icon.svg"
-config/version="0.2.2"
+config/version="0.2.3"
 
 [display]
 

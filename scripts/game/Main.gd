@@ -38,6 +38,9 @@ var _map_def: Maps.MapDef
 # 运行期状态
 var is_over: bool = false
 
+# 开局选图/选种界面（选中后必须释放，避免残留叠在游戏画面上）
+var map_select: MapSelect
+
 # 光照与环境节点（仅用于注入 DayNightCycle / WorldBuilder）
 var sun_light: DirectionalLight3D
 var world_env: WorldEnvironment
@@ -100,15 +103,19 @@ func _show_species_select() -> void:
 
 
 func _show_map_select() -> void:
-	var ms: MapSelect = MapSelectScene.instantiate() as MapSelect
-	dynamic.add_child(ms)
-	ms.selected.connect(_on_map_selected)
+	map_select = MapSelectScene.instantiate() as MapSelect
+	dynamic.add_child(map_select)
+	map_select.selected.connect(_on_map_selected)
 
 
 func _on_map_selected(map_id: String) -> void:
 	_map_def = Maps.by_id(map_id)
 	day_night.set_map_def(_map_def)
 	director.set_map_def(_map_def)
+	# 选中后立即释放选图界面，否则它会一直叠在游戏画面上（曾导致 UI 层级残留）
+	if map_select != null:
+		map_select.queue_free()
+		map_select = null
 	_show_species_select()
 
 
@@ -403,6 +410,7 @@ func _restart_run() -> void:
 		if child is SpeciesSelect or child is MapSelect:
 			child.queue_free()
 	species_select = null
+	map_select = null
 	# 2) 重置运行期状态（day_t 保持不动：世界时间连续更自然）
 	score_keeper.reset_all()
 	is_over = false
