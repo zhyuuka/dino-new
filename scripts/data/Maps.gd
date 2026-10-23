@@ -2,6 +2,14 @@ class_name Maps
 extends RefCounted
 ## 地图预设：地形来源（程序化噪声 / 下载高度图）+ 资源散布 + 天空/雾 基调。
 ## 所有自然模型均来自 Poly Haven（CC0 / 公有领域），高度图来自 3DTexel 社区库（CC0）。
+##
+## 移动端显存约束（2026-10 选种卡死修复）：
+## - 单图自然模型总体积（去重后的模型目录体积之和）必须 < 180MB；禁用 > 100MB 的高模。
+## - fir_tree_01（≈465MB）与 jacaranda_tree（≈205MB）已从全部地图剔除，任何 MapDef 不得再引用。
+## - 数量上限：tree_count ≤ 45、rock_count ≤ 30、plant_count ≤ 30（手机内存与可玩密度折中）。
+## - fir_sapling_medium（≈75MB）仅允许在 1 张图使用且实例数 ≤ 15（当前仅雪岭，tree_count=15）。
+## - 选型优先小体积：dead_tree_trunk(4.7MB) / island_tree_02(45MB) / island_tree_01(64MB) /
+##   boulder_01(5.6MB) / coast_land_rocks_04(33MB) 等；所有实例共享同一份模型资源。
 
 ## 默认地图 id：存档缺省与选图兜底统一引用此常量，避免业务代码裸写 "forest"
 const DEFAULT_MAP_ID := "forest"
@@ -63,15 +71,18 @@ static func by_id(id: String) -> MapDef:
 # 1) 森林谷地：起伏丘陵 + 茂密针叶林 + 三处湖泊
 static func _forest() -> MapDef:
 	var d := MapDef.new()
-	d.id = DEFAULT_MAP_ID; d.name = "森林谷地"; d.blurb = "起伏丘陵，茂密针叶林，三处湖泊，最适合新手。"
+	d.id = DEFAULT_MAP_ID; d.name = "森林谷地"; d.blurb = "起伏丘陵，茂密林地，三处湖泊，最适合新手。"
 	d.mode = 0; d.noise_seed = 7; d.noise_freq = 0.014; d.max_height = 22.0; d.snow_line = 0.8; d.water_level = 1.2
 	d.water_points = [Vector3(-45, 0, 45), Vector3(70, 0, -55), Vector3(-80, 0, -70)]
-	d.tree_models = ["fir_tree_01", "fir_sapling_medium", "island_tree_01", "island_tree_02", "dead_tree_trunk"]
-	d.tree_count = 110
-	d.rock_models = ["boulder_01", "coast_land_rocks_02", "coast_land_rocks_03", "namaqualand_boulder_02"]
-	d.rock_count = 40
+	# 树木 45 棵（原 110）：island_tree_01 64MB + island_tree_02 45MB + dead_tree_trunk 4.7MB ≈ 113.7MB
+	d.tree_models = ["island_tree_01", "island_tree_02", "dead_tree_trunk"]
+	d.tree_count = 45
+	# 岩石 26 块（原 40）：boulder_01 5.6MB + coast_land_rocks_04 33MB + namaqualand_boulder_02 5.0MB ≈ 43.6MB
+	d.rock_models = ["boulder_01", "coast_land_rocks_04", "namaqualand_boulder_02"]
+	d.rock_count = 26
+	# 植物 30 株（原 48）：合计 ≈ 9.5MB
 	d.plant_models = ["fern_02", "flower_heliophila", "grass_bermuda_01", "grass_medium_01"]
-	d.plant_count = 48
+	d.plant_count = 30
 	d.sky_top = Color(0.35, 0.6, 0.85); d.sky_horizon = Color(0.72, 0.83, 0.92)
 	d.ambient = 0.55; d.fog_color = Color(0.8, 0.85, 0.82); d.fog_density = 0.006
 	d.sun_color = Color(1.0, 0.98, 0.9)
@@ -86,10 +97,12 @@ static func _snow() -> MapDef:
 	d.id = "snow"; d.name = "高山雪岭"; d.blurb = "陡峭雪峰，寒雾弥漫，只有耐寒的松树与裸岩。"
 	d.mode = 0; d.noise_seed = 21; d.noise_freq = 0.01; d.max_height = 46.0; d.snow_line = 0.45; d.water_level = 2.0
 	d.water_points = [Vector3(60, 0, 60), Vector3(-70, 0, -60)]
-	d.tree_models = ["fir_tree_01", "fir_sapling_medium", "dead_tree_trunk"]
-	d.tree_count = 50
-	d.rock_models = ["boulder_01", "coast_land_rocks_02", "coast_land_rocks_04", "moon_rock_01"]
-	d.rock_count = 60
+	# 全项目唯一使用 fir_sapling_medium 的图：15 棵全部实例数 ≤ 15（75MB + dead_tree_trunk 4.7MB ≈ 79.7MB）
+	d.tree_models = ["fir_sapling_medium", "dead_tree_trunk"]
+	d.tree_count = 15
+	# 岩石 30 块（原 60）：boulder_01 5.6MB + coast_land_rocks_04 33MB + moon_rock_01 1.7MB ≈ 40.3MB
+	d.rock_models = ["boulder_01", "coast_land_rocks_04", "moon_rock_01"]
+	d.rock_count = 30
 	d.plant_models = ["fern_02", "grass_medium_02"]
 	d.plant_count = 16
 	d.sky_top = Color(0.45, 0.6, 0.85); d.sky_horizon = Color(0.86, 0.9, 0.95)
@@ -106,10 +119,12 @@ static func _waste() -> MapDef:
 	d.id = "waste"; d.name = "荒原丘陵"; d.blurb = "低矮红岩丘陵，稀疏灌木，干燥暖雾，资源稀缺。"
 	d.mode = 0; d.noise_seed = 99; d.noise_freq = 0.02; d.max_height = 13.0; d.snow_line = 0.9; d.water_level = 0.6
 	d.water_points = [Vector3(0, 0, -60), Vector3(-60, 0, 60)]
-	d.tree_models = ["dead_tree_trunk", "dead_tree_trunk_02", "island_tree_01"]
+	# 枯树 22 棵：dead_tree_trunk 4.7MB + dead_tree_trunk_02 4.8MB ≈ 9.5MB（该图不放阔叶树，贴合荒原）
+	d.tree_models = ["dead_tree_trunk", "dead_tree_trunk_02"]
 	d.tree_count = 22
-	d.rock_models = ["coast_land_rocks_02", "coast_land_rocks_03", "coast_land_rocks_04", "boulder_01", "namaqualand_boulder_02"]
-	d.rock_count = 70
+	# 岩石 30 块（原 70）：coast_land_rocks_02 38MB + coast_land_rocks_04 33MB + boulder_01 5.6MB + namaqualand_boulder_02 5.0MB ≈ 81.6MB
+	d.rock_models = ["coast_land_rocks_02", "coast_land_rocks_04", "boulder_01", "namaqualand_boulder_02"]
+	d.rock_count = 30
 	d.plant_models = ["flower_heliophila", "grass_medium_01", "grass_bermuda_01"]
 	d.plant_count = 30
 	d.sky_top = Color(0.6, 0.55, 0.5); d.sky_horizon = Color(0.85, 0.7, 0.55)
@@ -126,10 +141,12 @@ static func _canyon() -> MapDef:
 	d.id = "canyon"; d.name = "峡谷群峰"; d.blurb = "由下载的真实高度图生成的崎岖峡谷地貌，落差极大。"
 	d.mode = 1; d.noise_seed = 0; d.noise_freq = 0.0; d.max_height = 40.0; d.snow_line = 0.5; d.water_level = 3.0
 	d.water_points = [Vector3(0, 0, 0)]
-	d.tree_models = ["fir_tree_01", "dead_tree_trunk", "island_tree_02"]
-	d.tree_count = 36
-	d.rock_models = ["boulder_01", "coast_land_rocks_02", "coast_land_rocks_03", "coast_land_rocks_04"]
-	d.rock_count = 48
+	# 树木 34 棵：island_tree_02 45MB + dead_tree_trunk 4.7MB + dead_tree_trunk_02 4.8MB ≈ 54.5MB
+	d.tree_models = ["island_tree_02", "dead_tree_trunk", "dead_tree_trunk_02"]
+	d.tree_count = 34
+	# 岩石 30 块（原 48）：boulder_01 5.6MB + coast_land_rocks_02 38MB + coast_land_rocks_04 33MB ≈ 76.6MB
+	d.rock_models = ["boulder_01", "coast_land_rocks_02", "coast_land_rocks_04"]
+	d.rock_count = 30
 	d.plant_models = ["fern_02", "flower_heliophila", "grass_medium_02"]
 	d.plant_count = 26
 	d.sky_top = Color(0.4, 0.55, 0.8); d.sky_horizon = Color(0.8, 0.82, 0.85)

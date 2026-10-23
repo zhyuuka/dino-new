@@ -66,15 +66,26 @@ func spawn_foliage(parent: Node3D, def: Maps.MapDef, terrain: TerrainGenerator) 
 	return fs
 
 
-## 在地形上随机撒自然模型（树木 + 岩石），替代旧的 CSG 装饰
-func spawn_nature(parent: Node3D, def: Maps.MapDef, terrain: TerrainGenerator) -> void:
+## 在地形上随机撒自然模型（树木 + 岩石），替代旧的 CSG 装饰。
+## chunk_await > 0 时每处理 chunk_await 个候选点让出一帧（await process_frame），
+## 让加载界面能重绘、避免一次性同步 load() 大量模型把主线程堵死（手机端表现为"假死"）。
+## on_progress(done, total) 为可选进度回调；调用方必须 await 本函数才能等到全部撒完。
+func spawn_nature(parent: Node3D, def: Maps.MapDef, terrain: TerrainGenerator, chunk_await: int = 0, on_progress: Callable = Callable()) -> void:
 	if terrain == null:
 		return
 	var half := terrain.half_extent - 8.0
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
+	var total: int = def.tree_count + def.rock_count
+	var done: int = 0
 	# 树木
 	for i in def.tree_count:
+		# 分帧点：每 chunk_await 个让出一帧（NatureProp._ready 里是同步 load，必须在实例之间断开）
+		if chunk_await > 0 and done > 0 and done % chunk_await == 0:
+			if on_progress.is_valid():
+				on_progress.call(done, total)
+			await get_tree().process_frame
+		done += 1
 		var x: float = rng.randf_range(-half, half)
 		var z: float = rng.randf_range(-half, half)
 		if terrain.is_under_water(x, z):
@@ -88,6 +99,11 @@ func spawn_nature(parent: Node3D, def: Maps.MapDef, terrain: TerrainGenerator) -
 		parent.add_child(p)
 	# 岩石
 	for i in def.rock_count:
+		if chunk_await > 0 and done > 0 and done % chunk_await == 0:
+			if on_progress.is_valid():
+				on_progress.call(done, total)
+			await get_tree().process_frame
+		done += 1
 		var x: float = rng.randf_range(-half, half)
 		var z: float = rng.randf_range(-half, half)
 		if terrain.is_under_water(x, z):
@@ -99,6 +115,8 @@ func spawn_nature(parent: Node3D, def: Maps.MapDef, terrain: TerrainGenerator) -
 		var p := NatureProp.create(slug, s, 0.0)
 		p.global_position = Vector3(x, terrain.get_height(x, z), z)
 		parent.add_child(p)
+	if on_progress.is_valid():
+		on_progress.call(total, total)
 
 
 ## 巢穴与矿物盐散布在地图各处（避开水下点位，按地形高度放置）

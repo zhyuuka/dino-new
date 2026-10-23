@@ -1,0 +1,72 @@
+[gd_scene load_steps=2 format=3 uid="uid://loadingscreen001"]
+
+[ext_resource type="Script" path="res://scripts/ui/LoadingScreen.gd" id="1_load"]
+
+[node name="LoadingScreen" type="CanvasLayer"]
+process_mode = 3
+layer = 100
+script = ExtResource("1_load")
+
+[node name="Control" type="Control" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+
+[node name="Background" type="ColorRect" parent="Control"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+color = Color(0.05, 0.06, 0.08, 0.97)
+
+[node name="TitleLabel" type="Label" parent="Control"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = -64.0
+offset_right = 300.0
+offset_bottom = -8.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/font_size = 32
+text = "正在生成世界"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ProgressText" type="Label" parent="Control"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = 14.0
+offset_right = 300.0
+offset_bottom = 42.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "0% · 正在生成地形…"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ProgressBar" type="ProgressBar" parent="Control"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = 56.0
+offset_right = 200.0
+offset_bottom = 62.0
+grow_horizontal = 2
+grow_vertical = 2
+show_percentage = false

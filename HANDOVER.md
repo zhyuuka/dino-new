@@ -569,3 +569,46 @@ Step 6（最终导出）      → APK 构建 → 签名校验 → 提交 + push
 
 **需真机实测**：AI 产蛋频率与偷蛋威胁手感、玩家蛋跨代重生全流程（产蛋→死亡→从蛋出生→蛋消失）、拖拽叼取/放下手感（长按 0.2s 阈值）、领地盘踞与惊逃表现、成就横幅与引导目标条在死亡重开后的重连显示、文件日志（user://logs）生成——均为运行时行为，静态审查无法覆盖，需编辑器运行或 Android 真机实测确认。
 
+---
+
+## 十三、选种卡死修复（2026-10-18）
+
+> 线上确诊：点选恐龙后整机卡死。根因是 `Main._start_game` 在主线程同步 `load()` 超高面数自然模型——`fir_tree_01`（465MB）、`jacaranda_tree`（205MB）、`fir_sapling_medium`（75MB），森林图一次放 110 棵树；同帧还要构建 3.2 万三角面地形网格与三角网格碰撞。主线程被单帧独占，手机表现为"假死"。本轮从资产、代码、打包三层修复。
+
+**修复项**：
+
+1. **资产层（scripts/data/Maps.gd）**：4 张图全部剔除 `fir_tree_01` / `jacaranda_tree`；`fir_sapling_medium` 仅保留在雪岭且 `tree_count=15`（实例数 ≤ 15）。森林树木 110→45，全图数量硬上限 `tree_count ≤ 45 / rock_count ≤ 30 / plant_count ≤ 30`。文件顶部新增中文"移动端显存约束"注释（单图模型体积 <180MB，禁用 >100MB 高模）。森林图 blurb 由"茂密针叶林"改为"茂密林地"以匹配新模型。
+2. **加载界面（新增 scenes/LoadingScreen.tscn + scripts/ui/LoadingScreen.gd）**：CanvasLayer，`layer=100` 盖住选图/选种（默认 1），`process_mode=ALWAYS` 保证暂停残留时仍显示；全屏 Control/ColorRect `mouse_filter=STOP` 拦截误触；深色背景 + 居中「正在生成世界」+ "xx% · 阶段文案" + 细进度条；`set_progress(pct, text)` 推进、`fade_out()` 淡出。
+3. **Main.gd 分帧协程**：`_start_game` 改为可 await 的协程。流程：挂载 LoadingScreen → 渲染一帧 → 地形(15%) → 水源 → 植被(30%) → 自然物(45%→55% 分帧) → 资源点(55%) → HUD(65%) → 玩家(75%) → 生态+随机事件(85%) → 触屏+新手引导(100%) → 淡出并 `queue_free`。每个阶段之间 `await get_tree().process_frame`。`_on_species_selected` 与 `_continue_game` 共用此路径；`_restart_run` 保持原样（世界保留，不显示加载界面）。
+4. **WorldBuilder.spawn_nature 分帧参数**：新增 `chunk_await:int=0` 与 `on_progress:Callable`；`chunk_await>0` 时每处理 8 个候选点 `await get_tree().process_frame` 并回调进度。因 `NatureProp._ready` 内是同步 `load()`，断点必须落在实例之间。
+5. **版本**：`project.godot` config/version 0.2.0 → 0.2.2。
+
+**Maps 新配置（模型清单 / 数量 / 体积合计，体积按模型目录 du 计）**：
+
+| 地图 | 树木（数量 ≤45） | 岩石（数量 ≤30） | 植物（数量 ≤30） | 模型体积合计 |
+|------|------------------|------------------|------------------|--------------|
+| forest 森林谷地 | island_tree_01 / island_tree_02 / dead_tree_trunk（45） | boulder_01 / coast_land_rocks_04 / namaqualand_boulder_02（26） | fern_02 / flower_heliophila / grass_bermuda_01 / grass_medium_01（30） | 163.4 MB |
+| snow 高山雪岭 | fir_sapling_medium / dead_tree_trunk（15） | boulder_01 / coast_land_rocks_04 / moon_rock_01（30） | fern_02 / grass_medium_02（16） | 120.1 MB |
+| waste 荒原丘陵 | dead_tree_trunk / dead_tree_trunk_02（22） | coast_land_rocks_02 / coast_land_rocks_04 / boulder_01 / namaqualand_boulder_02（30） | flower_heliophila / grass_medium_01 / grass_bermuda_01（30） | 97.5 MB |
+| canyon 峡谷群峰 | island_tree_02 / dead_tree_trunk / dead_tree_trunk_02（34） | boulder_01 / coast_land_rocks_02 / coast_land_rocks_04（30） | fern_02 / flower_heliophila / grass_medium_02（26） | 134.2 MB |
+
+**本地验证**：
+
+- `--editor --quit` 重新导入后 `grep -i "script error"` 输出为空（0 错误）。
+- 临时 headless 测量（/tmp，测后删除）：森林图 3 个去重树模 `load()` 合计 **1268ms**，静态内存常驻 **304.7MB**（原 `fir_tree_01` 单个 465MB 文件，运行时内存远超此值）；`TerrainGenerator.setup` **105～117ms**（128×128 / 3.2 万三角面 + trimesh 碰撞）。四图约束自检全部通过：无禁用模型、数量达标、`fir_sapling_medium` 仅 1 张图、体积均 <180MB。
+- 冒烟脚本以 headless 实例化 Main 并走选图→选种→开局：世界就绪后加载界面已淡出释放（`loading_screen=null`），随后调用 `_restart_run` 正常重建玩家/HUD 且不出现加载界面。
+- 注：冒烟日志中 `get_global_transform: !is_inside_tree()` 报错为 WorldBuilder 既有写法（先设 global_position 再 add_child），不影响落位，非本次引入；未在本次范围内改动。
+
+**APK v0.2.2**：
+
+- 路径：`/workspace/DinoWorld-v0.2.2.apk`（仓库内 `build/DinoWorld-v0.2.2.apk`），732,345,505 字节（约 699MB）。
+- aapt：`package com.dinoworld.game`，`versionName='0.2.2'`，`native-code: 'arm64-v8a'`，minSdk 21 / targetSdk 34。
+- Release：https://github.com/zhyuuka/dino-new/releases/tag/v0.2.2
+
+**后续待办**：
+
+- 若要恢复高画质森林，需先做减面 / LOD（或植被实例化 MultiMesh），不能直接放回 465MB 级高模。
+- APK 体积仍约 699MB：未引用的高模仍以 `all_resources` 打进包内（运行时已不加载），后续可删除未引用资产或配置导出过滤瘦身。
+- 需真机复测：加载界面进度节奏、分帧后各图开局帧率、45 棵树的森林观感是否仍够"茂密"。
+
+

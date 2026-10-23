@@ -11,6 +11,10 @@ const HUDScene: PackedScene = preload("res://scenes/HUD.tscn")
 const TouchControlsScene: PackedScene = preload("res://scenes/TouchControls.tscn")
 const SpeciesSelectScene: PackedScene = preload("res://scenes/SpeciesSelect.tscn")
 const MapSelectScene: PackedScene = preload("res://scenes/MapSelect.tscn")
+const LoadingScreenScene: PackedScene = preload("res://scenes/LoadingScreen.tscn")
+
+# 自然物分帧粒度：每 8 个自然物让出一帧（模型 load() 是同步的，必须在实例之间断点）
+const LOADING_CHUNK: int = 8
 
 # 环境音（程序化合成风声，循环）
 const SFX_AMBIENT := preload("res://assets/audio/ambient.wav")
@@ -25,6 +29,7 @@ var dynamic: Node3D
 var hud: HUD
 var touch_controls: TouchControls
 var species_select: SpeciesSelect
+var loading_screen: LoadingScreen
 
 # 地形生成器（替代旧的 CSG 地板）
 var terrain: TerrainGenerator
@@ -142,20 +147,52 @@ func _start_game(species_id: String, is_continue: bool) -> void:
 	score_keeper.reset()
 	is_over = false
 
-	# 世界资产（仅首局生成，死亡重开不重建）
+	# ---- 全屏加载界面：先挂上并渲染一帧，再开始重活，避免点选后整屏"假死" ----
+	# CanvasLayer.layer=100，盖住选种界面（默认 layer 1）；PROCESS_MODE_ALWAYS 由脚本设置
+	loading_screen = LoadingScreenScene.instantiate() as LoadingScreen
+	dynamic.add_child(loading_screen)
+	_set_loading(0.0, "正在生成地形…")
+	await get_tree().process_frame
+
+	# 世界资产（仅首局生成，死亡重开不重建）。地形 32k 三角面 + 三角网格碰撞，单帧构建
 	terrain = world_builder.spawn_terrain(dynamic, _map_def, world_env)
 	director.set_terrain(terrain)
+	_set_loading(15.0, "正在注入水源…")
+	await get_tree().process_frame
+
 	world_builder.spawn_water(dynamic, _map_def)
+	_set_loading(30.0, "正在播撒植被…")
+	await get_tree().process_frame
+
 	foliage_spawner = world_builder.spawn_foliage(dynamic, _map_def, terrain)
-	world_builder.spawn_nature(dynamic, _map_def, terrain)
+	_set_loading(45.0, "正在种植自然物…")
+	await get_tree().process_frame
+
+	# 自然物必分帧：每 8 个让出一帧（NatureProp._ready 内是同步 load()，不拆帧会堵死主线程）
+	await world_builder.spawn_nature(dynamic, _map_def, terrain, LOADING_CHUNK, _on_nature_progress)
+	_set_loading(55.0, "正在布置资源点…")
+	await get_tree().process_frame
+
 	world_builder.spawn_resource_points(dynamic, terrain)
+	_set_loading(65.0, "正在准备界面…")
+	await get_tree().process_frame
+
 	# 运行期角色与 UI（顺序：HUD → 玩家 → 生态 → 随机事件 → 触屏）
 	_spawn_hud()
+	_set_loading(75.0, "正在唤醒你的恐龙…")
+	await get_tree().process_frame
+
 	_spawn_player(species_id, stage, gen)
+	_set_loading(85.0, "正在唤醒生态…")
+	await get_tree().process_frame
+
 	director.spawn_roster(stage)
 	_spawn_random_events()
-	_spawn_touch_controls()
+	_set_loading(100.0, "准备就绪")
+	await get_tree().process_frame
 
+	# 触屏与新手引导（依赖玩家已就绪，故放在最后）
+	_spawn_touch_controls()
 	hud.show_hint("管理好饥饿/口渴/体力。靠近湖泊按 E 或饮水键喝水，吃对的食物会成长。")
 	hud.show_help()
 
@@ -163,6 +200,23 @@ func _start_game(species_id: String, is_continue: bool) -> void:
 	# 0.5s 周期扫描自动发现/重连玩家与 HUD（死亡重开重建后同样跟随）；
 	# 引导已完成（Achievements 跨局存档标记）时其 _ready 内自毁，挂载零成本
 	add_child(TutorialGuide.new())
+
+	# 世界已完整可玩：淡出加载界面并释放
+	await loading_screen.fade_out()
+	loading_screen.queue_free()
+	loading_screen = null
+
+
+## 加载进度推进（_restart_run 不显示加载界面，故此处判空）
+func _set_loading(pct: float, text: String) -> void:
+	if loading_screen != null and is_instance_valid(loading_screen):
+		loading_screen.set_progress(pct, text)
+
+
+## 自然物撒布的进度回调：45%（起点）→ 55%（完成），由 WorldBuilder 每帧块回调一次
+func _on_nature_progress(done: int, total: int) -> void:
+	var pct: float = 45.0 + 10.0 * float(done) / float(maxi(total, 1))
+	_set_loading(pct, "正在种植自然物… %d/%d" % [done, total])
 
 
 # ================= 玩家 / HUD / 触屏 =================
