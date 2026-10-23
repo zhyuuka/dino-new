@@ -1,38 +1,123 @@
 {
   "asset": {
-    "generator": "Khronos glTF Blender I/O v4.0.44",
+    "generator": "glTF-Transform v4.5.1",
     "version": "2.0"
   },
-  "scene": 0,
-  "scenes": [
+  "accessors": [
     {
-      "name": "Scene",
-      "nodes": [
-        0
-      ]
+      "type": "SCALAR",
+      "componentType": 5123,
+      "count": 49860,
+      "bufferView": 0,
+      "byteOffset": 0
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 10575,
+      "max": [
+        2.1269466876983643,
+        0.7263616323471069,
+        0.5537870526313782
+      ],
+      "min": [
+        -1.9244168996810913,
+        -0.32755279541015625,
+        -0.49890759587287903
+      ],
+      "bufferView": 1,
+      "byteOffset": 0
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 10575,
+      "bufferView": 1,
+      "byteOffset": 12
+    },
+    {
+      "type": "VEC2",
+      "componentType": 5126,
+      "count": 10575,
+      "bufferView": 1,
+      "byteOffset": 24
     }
   ],
-  "nodes": [
+  "bufferViews": [
     {
-      "mesh": 0,
-      "name": "dead_tree_trunk_02"
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 99720,
+      "target": 34963
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 99720,
+      "byteLength": 338400,
+      "byteStride": 32,
+      "target": 34962
+    }
+  ],
+  "samplers": [
+    {
+      "magFilter": 9729,
+      "minFilter": 9987,
+      "wrapS": 10497,
+      "wrapT": 10497
+    }
+  ],
+  "textures": [
+    {
+      "source": 1,
+      "sampler": 0
+    },
+    {
+      "source": 0,
+      "sampler": 0
+    },
+    {
+      "source": 2,
+      "sampler": 0
+    }
+  ],
+  "images": [
+    {
+      "name": "dead_tree_trunk_02_nor_gl",
+      "mimeType": "image/jpeg",
+      "uri": "textures/dead_tree_trunk_02_nor_gl_1k.jpg"
+    },
+    {
+      "name": "dead_tree_trunk_02_diff",
+      "mimeType": "image/jpeg",
+      "uri": "textures/dead_tree_trunk_02_diff_1k.jpg"
+    },
+    {
+      "name": "dead_tree_trunk_02_rough",
+      "mimeType": "image/jpeg",
+      "uri": "textures/dead_tree_trunk_02_arm_1k.jpg"
+    }
+  ],
+  "buffers": [
+    {
+      "uri": "dead_tree_trunk_02.bin",
+      "byteLength": 438120
     }
   ],
   "materials": [
     {
-      "doubleSided": true,
       "name": "dead_tree_trunk_02",
-      "normalTexture": {
-        "index": 0
-      },
+      "doubleSided": true,
       "pbrMetallicRoughness": {
-        "baseColorTexture": {
-          "index": 1
-        },
         "metallicFactor": 0,
+        "baseColorTexture": {
+          "index": 0
+        },
         "metallicRoughnessTexture": {
           "index": 2
         }
+      },
+      "normalTexture": {
+        "index": 1
       }
     }
   ],
@@ -42,119 +127,30 @@
       "primitives": [
         {
           "attributes": {
-            "POSITION": 0,
-            "NORMAL": 1,
-            "TEXCOORD_0": 2
+            "POSITION": 1,
+            "NORMAL": 2,
+            "TEXCOORD_0": 3
           },
-          "indices": 3,
-          "material": 0
+          "mode": 4,
+          "material": 0,
+          "indices": 0
         }
       ]
     }
   ],
-  "textures": [
+  "nodes": [
     {
-      "sampler": 0,
-      "source": 0
-    },
-    {
-      "sampler": 0,
-      "source": 1
-    },
-    {
-      "sampler": 0,
-      "source": 2
+      "name": "dead_tree_trunk_02",
+      "mesh": 0
     }
   ],
-  "images": [
+  "scenes": [
     {
-      "mimeType": "image/jpeg",
-      "name": "dead_tree_trunk_02_nor_gl",
-      "uri": "textures/dead_tree_trunk_02_nor_gl_1k.jpg"
-    },
-    {
-      "mimeType": "image/jpeg",
-      "name": "dead_tree_trunk_02_diff",
-      "uri": "textures/dead_tree_trunk_02_diff_1k.jpg"
-    },
-    {
-      "mimeType": "image/jpeg",
-      "name": "dead_tree_trunk_02_rough",
-      "uri": "textures/dead_tree_trunk_02_arm_1k.jpg"
+      "name": "Scene",
+      "nodes": [
+        0
+      ]
     }
   ],
-  "accessors": [
-    {
-      "bufferView": 0,
-      "componentType": 5126,
-      "count": 46112,
-      "max": [
-        2.1269466876983643,
-        0.7267211079597473,
-        0.5553070902824402
-      ],
-      "min": [
-        -1.9244168996810913,
-        -0.3283522427082062,
-        -0.500821590423584
-      ],
-      "type": "VEC3"
-    },
-    {
-      "bufferView": 1,
-      "componentType": 5126,
-      "count": 46112,
-      "type": "VEC3"
-    },
-    {
-      "bufferView": 2,
-      "componentType": 5126,
-      "count": 46112,
-      "type": "VEC2"
-    },
-    {
-      "bufferView": 3,
-      "componentType": 5123,
-      "count": 249384,
-      "type": "SCALAR"
-    }
-  ],
-  "bufferViews": [
-    {
-      "buffer": 0,
-      "byteLength": 553344,
-      "byteOffset": 0,
-      "target": 34962
-    },
-    {
-      "buffer": 0,
-      "byteLength": 553344,
-      "byteOffset": 553344,
-      "target": 34962
-    },
-    {
-      "buffer": 0,
-      "byteLength": 368896,
-      "byteOffset": 1106688,
-      "target": 34962
-    },
-    {
-      "buffer": 0,
-      "byteLength": 498768,
-      "byteOffset": 1475584,
-      "target": 34963
-    }
-  ],
-  "samplers": [
-    {
-      "magFilter": 9729,
-      "minFilter": 9987
-    }
-  ],
-  "buffers": [
-    {
-      "byteLength": 1974352,
-      "uri": "dead_tree_trunk_02.bin"
-    }
-  ]
+  "scene": 0
 }

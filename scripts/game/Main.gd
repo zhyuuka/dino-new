@@ -16,6 +16,11 @@ const LoadingScreenScene: PackedScene = preload("res://scenes/LoadingScreen.tscn
 # 自然物分帧粒度：每 8 个自然物让出一帧（模型 load() 是同步的，必须在实例之间断点）
 const LOADING_CHUNK: int = 8
 
+# 真实资源预加载占整体进度的 0.0~0.70；之后的实例化阶段占 0.70~1.0
+const PRELOAD_PROGRESS_END: float = 0.70
+# 预加载超时（秒）：超时仅记录 warning 并继续进入世界生成，避免异常 IO 让玩家无限等待
+const PRELOAD_TIMEOUT_SEC: float = 120.0
+
 # 环境音（程序化合成风声，循环）
 const SFX_AMBIENT := preload("res://assets/audio/ambient.wav")
 
@@ -30,6 +35,10 @@ var hud: HUD
 var touch_controls: TouchControls
 var species_select: SpeciesSelect
 var loading_screen: LoadingScreen
+
+# 预加载取回的模型资源强引用：防止刚取回就被资源缓存回收，
+# 保证后续 NatureProp / Foliage / DinoVisual 的同步 load() 全部命中缓存
+var _preload_refs: Array[Resource] = []
 
 # 地形生成器（替代旧的 CSG 地板）
 var terrain: TerrainGenerator
@@ -161,44 +170,51 @@ func _start_game(species_id: String, is_continue: bool) -> void:
 	# CanvasLayer.layer=100，盖住选种界面（默认 layer 1）；PROCESS_MODE_ALWAYS 由脚本设置
 	loading_screen = LoadingScreenScene.instantiate() as LoadingScreen
 	dynamic.add_child(loading_screen)
-	_set_loading(0.0, "正在生成地形…")
+	_set_loading(0.0, "正在准备资源…")
 	await get_tree().process_frame
 
+	# 先真实预加载世界资产（模型在线程池解析，进度 0~70%）。此后 NatureProp / Foliage /
+	# DinoVisual 里的同步 load() 全部命中资源缓存，主线程不再解析 gltf/glb
+	await _preload_world_assets()
+
 	# 世界资产（仅首局生成，死亡重开不重建）。地形 32k 三角面 + 三角网格碰撞，单帧构建
+	_set_loading(0.70, "正在生成地形…")
+	await get_tree().process_frame
 	terrain = world_builder.spawn_terrain(dynamic, _map_def, world_env)
 	director.set_terrain(terrain)
-	_set_loading(15.0, "正在注入水源…")
+	_set_loading(0.78, "正在注入水源…")
 	await get_tree().process_frame
 
 	world_builder.spawn_water(dynamic, _map_def)
-	_set_loading(30.0, "正在播撒植被…")
+	_set_loading(0.82, "正在播撒植被…")
 	await get_tree().process_frame
 
 	foliage_spawner = world_builder.spawn_foliage(dynamic, _map_def, terrain)
-	_set_loading(45.0, "正在种植自然物…")
+	_set_loading(0.85, "正在种植自然物…")
 	await get_tree().process_frame
 
-	# 自然物必分帧：每 8 个让出一帧（NatureProp._ready 内是同步 load()，不拆帧会堵死主线程）
+	# 自然物仍分帧：每 8 个让出一帧，避免一次性挂载大量节点造成帧卡顿
+	# （模型已预加载，_ready 内的同步 load() 只查缓存，不再读盘解析）
 	await world_builder.spawn_nature(dynamic, _map_def, terrain, LOADING_CHUNK, _on_nature_progress)
-	_set_loading(55.0, "正在布置资源点…")
+	_set_loading(0.93, "正在布置资源点…")
 	await get_tree().process_frame
 
 	world_builder.spawn_resource_points(dynamic, terrain)
-	_set_loading(65.0, "正在准备界面…")
+	_set_loading(0.95, "正在准备界面…")
 	await get_tree().process_frame
 
 	# 运行期角色与 UI（顺序：HUD → 玩家 → 生态 → 随机事件 → 触屏）
 	_spawn_hud()
-	_set_loading(75.0, "正在唤醒你的恐龙…")
+	_set_loading(0.96, "正在唤醒你的恐龙…")
 	await get_tree().process_frame
 
 	_spawn_player(species_id, stage, gen)
-	_set_loading(85.0, "正在唤醒生态…")
+	_set_loading(0.98, "正在唤醒生态…")
 	await get_tree().process_frame
 
 	director.spawn_roster(stage)
 	_spawn_random_events()
-	_set_loading(100.0, "准备就绪")
+	_set_loading(1.0, "准备就绪")
 	await get_tree().process_frame
 
 	# 触屏与新手引导（依赖玩家已就绪，故放在最后）
@@ -219,16 +235,111 @@ func _start_game(species_id: String, is_continue: bool) -> void:
 	loading_screen = null
 
 
-## 加载进度推进（_restart_run 不显示加载界面，故此处判空）
-func _set_loading(pct: float, text: String) -> void:
+## 加载进度推进（ratio 为 0.0~1.0 小数；_restart_run 不显示加载界面，故此处判空）
+func _set_loading(ratio: float, text: String) -> void:
 	if loading_screen != null and is_instance_valid(loading_screen):
-		loading_screen.set_progress(pct, text)
+		loading_screen.set_progress(ratio, text)
 
 
-## 自然物撒布的进度回调：45%（起点）→ 55%（完成），由 WorldBuilder 每帧块回调一次
+## 自然物撒布的进度回调：0.85（起点）→ 0.92（完成），由 WorldBuilder 每帧块回调一次
 func _on_nature_progress(done: int, total: int) -> void:
-	var pct: float = 45.0 + 10.0 * float(done) / float(maxi(total, 1))
-	_set_loading(pct, "正在种植自然物… %d/%d" % [done, total])
+	var ratio: float = 0.85 + 0.07 * float(done) / float(maxi(total, 1))
+	_set_loading(ratio, "正在种植自然物… %d/%d" % [done, total])
+
+
+# ================= 资源预加载 =================
+## 收集当前地图与世界会用到的全部模型路径（去重）：
+## 自然物 res://assets/models/nature/<slug>/<slug>_1k.gltf + 全部恐龙 res://assets/models/<id>.glb。
+## 恐龙 id 来自 DinoSpecies.all()，与物种数据库保持一致，避免在此硬编码文件名。
+func _collect_world_asset_paths() -> Array[String]:
+	var seen: Dictionary = {}
+	var paths: Array[String] = []
+	var slugs: Array = []
+	if _map_def != null:
+		slugs.append_array(_map_def.tree_models)
+		slugs.append_array(_map_def.rock_models)
+		slugs.append_array(_map_def.plant_models)
+	for slug_value in slugs:
+		var slug: String = str(slug_value)
+		if slug.is_empty():
+			continue
+		var nature_path: String = "res://assets/models/nature/%s/%s_1k.gltf" % [slug, slug]
+		if not seen.has(nature_path):
+			seen[nature_path] = true
+			paths.append(nature_path)
+	for def in DinoSpecies.all():
+		var sp: DinoSpecies.SpeciesDef = def as DinoSpecies.SpeciesDef
+		if sp == null:
+			continue
+		var dino_path: String = "res://assets/models/%s.glb" % sp.id
+		if not seen.has(dino_path):
+			seen[dino_path] = true
+			paths.append(dino_path)
+	return paths
+
+
+## 真实资源预加载（整体进度 0.0 → PRELOAD_PROGRESS_END）：全部模型交给 ResourceLoader 线程池
+## 异步解析，每帧轮询各 path 的 status/progress 汇总出真实进度，主线程不再同步解析 gltf/glb。
+## 全部完成后 load_threaded_get 取回并保存在 _preload_refs，后续同步 load() 直接命中缓存。
+## 单项失败仅 warning 跳过；超过 PRELOAD_TIMEOUT_SEC 未完成则 warning 后继续，绝不无限等待。
+func _preload_world_assets() -> void:
+	var paths: Array[String] = _collect_world_asset_paths()
+	if paths.is_empty():
+		return
+	_preload_refs.clear()
+	var pending: Array[String] = []
+	for p in paths:
+		var err: Error = ResourceLoader.load_threaded_request(p, "PackedScene")
+		# ERR_BUSY：同路径已有请求在途，继续轮询即可；其他错误记录后跳过，不阻塞进局
+		if err == OK or err == ERR_BUSY:
+			pending.append(p)
+		else:
+			push_warning("资源预加载跳过 %s：load_threaded_request 返回错误 %d" % [p, err])
+	var total: int = maxi(pending.size(), 1)
+	var finished: int = 0
+	var ratio: float = 0.0
+	var deadline_msec: int = Time.get_ticks_msec() + int(PRELOAD_TIMEOUT_SEC * 1000.0)
+	_set_loading(0.0, "正在加载资源…")
+	while not pending.is_empty():
+		if Time.get_ticks_msec() >= deadline_msec:
+			push_warning("资源预加载超时 %.0f 秒，跳过剩余 %d 项（进入世界后按需同步加载）" % [PRELOAD_TIMEOUT_SEC, pending.size()])
+			break
+		var partial: float = 0.0
+		var completed_idx: Array[int] = []
+		var failed_idx: Array[int] = []
+		for i in pending.size():
+			var path: String = pending[i]
+			var progress: Array = []
+			var status: int = ResourceLoader.load_threaded_get_status(path, progress)
+			if status == ResourceLoader.THREAD_LOAD_LOADED:
+				completed_idx.append(i)
+			elif status == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+				if not progress.is_empty():
+					partial += clampf(float(progress[0]), 0.0, 1.0)
+			else:
+				# FAILED / INVALID_RESOURCE：记录并跳过该路径，不阻塞整体流程
+				push_warning("资源预加载失败 %s（status=%d），已跳过" % [path, status])
+				failed_idx.append(i)
+		# 已完成项取回资源并保持强引用，防止刚加载就被缓存回收
+		for i in range(completed_idx.size() - 1, -1, -1):
+			var idx: int = completed_idx[i]
+			var res: Resource = ResourceLoader.load_threaded_get(pending[idx])
+			if res != null:
+				_preload_refs.append(res)
+			else:
+				push_warning("资源预加载取回为空 %s" % pending[idx])
+			pending.remove_at(idx)
+		for i in range(failed_idx.size() - 1, -1, -1):
+			pending.remove_at(failed_idx[i])
+		finished += completed_idx.size() + failed_idx.size()
+		# 真实进度 = （已完成 + 失败跳过 + 在途项各自 progress） / 总数
+		ratio = clampf((float(finished) + partial) / float(total), 0.0, 1.0)
+		_set_loading(PRELOAD_PROGRESS_END * ratio, "正在加载资源… %d/%d" % [finished, total])
+		if pending.is_empty():
+			break
+		await get_tree().process_frame
+	# 正常完成或超时都推进到本阶段终点，无缝衔接后续实例化阶段
+	_set_loading(PRELOAD_PROGRESS_END, "正在加载资源… %d/%d" % [finished, total])
 
 
 # ================= 玩家 / HUD / 触屏 =================

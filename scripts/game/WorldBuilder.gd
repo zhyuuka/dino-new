@@ -18,6 +18,9 @@ const TREE_VIEW_MARGIN: float = 10.0
 const ROCK_VIEW_DISTANCE: float = 65.0
 const ROCK_VIEW_MARGIN: float = 8.0
 
+## 自然物合并开关：true = 分块 MultiMesh（少量节点/合批绘制）；false = 旧的逐棵 NatureProp 节点路径（回退用）
+const USE_MULTIMESH: bool = true
+
 # 巢穴与矿物盐的固定散布点（坐标为水平面位置，高度按地形落点计算）
 const NEST_POINTS: Array[Vector3] = [
 	Vector3(45.0, 0.0, 50.0),
@@ -75,6 +78,8 @@ func spawn_foliage(parent: Node3D, def: Maps.MapDef, terrain: TerrainGenerator) 
 
 
 ## 在地形上随机撒自然模型（树木 + 岩石），替代旧的 CSG 装饰。
+## USE_MULTIMESH=true 时只收集 (slug, 位置, 缩放, 偏航) 并按 32m 块 + slug 分组，
+## 最后一次性烘焙为 MultiMesh；false 时回退旧的逐棵 NatureProp 节点路径。
 ## chunk_await > 0 时每处理 chunk_await 个候选点让出一帧（await process_frame），
 ## 让加载界面能重绘、避免一次性同步 load() 大量模型把主线程堵死（手机端表现为"假死"）。
 ## on_progress(done, total) 为可选进度回调；调用方必须 await 本函数才能等到全部撒完。
@@ -86,9 +91,11 @@ func spawn_nature(parent: Node3D, def: Maps.MapDef, terrain: TerrainGenerator, c
 	rng.randomize()
 	var total: int = def.tree_count + def.rock_count
 	var done: int = 0
+	# 合并路径的分组容器：chunk -> slug -> Array[NatureBatch.Item]
+	var groups: Dictionary = {}
 	# 树木
 	for i in def.tree_count:
-		# 分帧点：每 chunk_await 个让出一帧（NatureProp._ready 里是同步 load，必须在实例之间断开）
+		# 分帧点：每 chunk_await 个让出一帧（烘焙前模型可能同步 load，必须断开重活）
 		if chunk_await > 0 and done > 0 and done % chunk_await == 0:
 			if on_progress.is_valid():
 				on_progress.call(done, total)
@@ -102,10 +109,21 @@ func spawn_nature(parent: Node3D, def: Maps.MapDef, terrain: TerrainGenerator, c
 			continue  # 出生点附近留空
 		var slug: String = def.tree_models[rng.randi() % def.tree_models.size()]
 		var s: float = rng.randf_range(0.8, 1.3)
-		var p := NatureProp.create(slug, s, 0.0, TREE_VIEW_DISTANCE, TREE_VIEW_MARGIN)
-		# 先入树再落位：节点不在树内时写 global_position 会走 is_inside_tree 报错分支
-		parent.add_child(p)
-		p.global_position = Vector3(x, terrain.get_height(x, z), z)
+		var pos := Vector3(x, terrain.get_height(x, z), z)
+		if USE_MULTIMESH:
+			var it := NatureBatch.Item.new()
+			it.slug = slug
+			it.position = pos
+			it.scale = s
+			it.yaw = rng.randf() * TAU
+			it.view_end = TREE_VIEW_DISTANCE
+			it.view_margin = TREE_VIEW_MARGIN
+			NatureBatch.add(groups, it)
+		else:
+			var p := NatureProp.create(slug, s, 0.0, TREE_VIEW_DISTANCE, TREE_VIEW_MARGIN)
+			# 先入树再落位：节点不在树内时写 global_position 会走 is_inside_tree 报错分支
+			parent.add_child(p)
+			p.global_position = pos
 	# 岩石
 	for i in def.rock_count:
 		if chunk_await > 0 and done > 0 and done % chunk_await == 0:
@@ -121,9 +139,22 @@ func spawn_nature(parent: Node3D, def: Maps.MapDef, terrain: TerrainGenerator, c
 			continue
 		var slug: String = def.rock_models[rng.randi() % def.rock_models.size()]
 		var s: float = rng.randf_range(0.6, 1.8)
-		var p := NatureProp.create(slug, s, 0.0, ROCK_VIEW_DISTANCE, ROCK_VIEW_MARGIN)
-		parent.add_child(p)
-		p.global_position = Vector3(x, terrain.get_height(x, z), z)
+		var pos := Vector3(x, terrain.get_height(x, z), z)
+		if USE_MULTIMESH:
+			var it := NatureBatch.Item.new()
+			it.slug = slug
+			it.position = pos
+			it.scale = s
+			it.yaw = rng.randf() * TAU
+			it.view_end = ROCK_VIEW_DISTANCE
+			it.view_margin = ROCK_VIEW_MARGIN
+			NatureBatch.add(groups, it)
+		else:
+			var p := NatureProp.create(slug, s, 0.0, ROCK_VIEW_DISTANCE, ROCK_VIEW_MARGIN)
+			parent.add_child(p)
+			p.global_position = pos
+	if USE_MULTIMESH:
+		NatureBatch.bake(groups, parent)
 	if on_progress.is_valid():
 		on_progress.call(total, total)
 

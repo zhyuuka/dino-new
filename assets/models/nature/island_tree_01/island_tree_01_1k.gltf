@@ -1,77 +1,325 @@
 {
   "asset": {
-    "generator": "Khronos glTF Blender I/O v4.4.56",
+    "generator": "glTF-Transform v4.5.1",
     "version": "2.0"
   },
-  "extensionsUsed": [
-    "KHR_materials_specular",
-    "KHR_materials_ior",
-    "KHR_texture_transform"
-  ],
-  "extensionsRequired": [
-    "KHR_texture_transform"
-  ],
-  "scene": 0,
-  "scenes": [
+  "accessors": [
     {
-      "name": "Scene",
-      "nodes": [
-        0
-      ]
+      "type": "SCALAR",
+      "componentType": 5123,
+      "count": 34257,
+      "bufferView": 0,
+      "byteOffset": 0
+    },
+    {
+      "type": "SCALAR",
+      "componentType": 5125,
+      "count": 394779,
+      "bufferView": 0,
+      "byteOffset": 68516
+    },
+    {
+      "type": "SCALAR",
+      "componentType": 5123,
+      "count": 144042,
+      "bufferView": 0,
+      "byteOffset": 1647632
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 6965,
+      "max": [
+        1.7236499786376953,
+        3.5600593090057373,
+        1.2547868490219116
+      ],
+      "min": [
+        -1.4278439283370972,
+        -0.020327899605035782,
+        -1.7317125797271729
+      ],
+      "bufferView": 1,
+      "byteOffset": 0
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 6965,
+      "bufferView": 1,
+      "byteOffset": 12
+    },
+    {
+      "type": "VEC2",
+      "componentType": 5126,
+      "count": 6965,
+      "bufferView": 1,
+      "byteOffset": 24
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 214414,
+      "max": [
+        2.4107038974761963,
+        5.0071187019348145,
+        2.2339046001434326
+      ],
+      "min": [
+        -2.3444457054138184,
+        0.6301747560501099,
+        -2.583538055419922
+      ],
+      "bufferView": 2,
+      "byteOffset": 0
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 214414,
+      "bufferView": 2,
+      "byteOffset": 12
+    },
+    {
+      "type": "VEC2",
+      "componentType": 5126,
+      "count": 214414,
+      "bufferView": 2,
+      "byteOffset": 24
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 42801,
+      "max": [
+        2.3041460514068604,
+        4.8796539306640625,
+        2.1925296783447266
+      ],
+      "min": [
+        -2.3076677322387695,
+        0.7453981637954712,
+        -2.5392673015594482
+      ],
+      "bufferView": 3,
+      "byteOffset": 0
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 42801,
+      "bufferView": 3,
+      "byteOffset": 12
+    },
+    {
+      "type": "VEC2",
+      "componentType": 5126,
+      "count": 42801,
+      "bufferView": 3,
+      "byteOffset": 24
     }
   ],
-  "nodes": [
+  "bufferViews": [
     {
-      "mesh": 0,
-      "name": "island_tree_01_LOD0"
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 1935716,
+      "target": 34963
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 1935716,
+      "byteLength": 222880,
+      "byteStride": 32,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 2158596,
+      "byteLength": 6861248,
+      "byteStride": 32,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 9019844,
+      "byteLength": 1369632,
+      "byteStride": 32,
+      "target": 34962
+    }
+  ],
+  "samplers": [
+    {
+      "magFilter": 9729,
+      "minFilter": 9987,
+      "wrapS": 10497,
+      "wrapT": 10497
+    }
+  ],
+  "textures": [
+    {
+      "source": 1,
+      "sampler": 0
+    },
+    {
+      "source": 0,
+      "sampler": 0
+    },
+    {
+      "source": 2,
+      "sampler": 0
+    },
+    {
+      "source": 4,
+      "sampler": 0
+    },
+    {
+      "source": 3,
+      "sampler": 0
+    },
+    {
+      "source": 5,
+      "sampler": 0
+    },
+    {
+      "source": 7,
+      "sampler": 0
+    },
+    {
+      "source": 6,
+      "sampler": 0
+    },
+    {
+      "source": 8,
+      "sampler": 0
+    }
+  ],
+  "images": [
+    {
+      "name": "island_tree_01_nor_gl",
+      "mimeType": "image/jpeg",
+      "uri": "textures/island_tree_01_nor_gl_1k.jpg"
+    },
+    {
+      "name": "island_tree_01_diff",
+      "mimeType": "image/jpeg",
+      "uri": "textures/island_tree_01_diff_1k.jpg"
+    },
+    {
+      "name": "island_tree_01_rough",
+      "mimeType": "image/jpeg",
+      "uri": "textures/island_tree_01_arm_1k.jpg"
+    },
+    {
+      "name": "island_tree_01_leaves_nor_gl",
+      "mimeType": "image/jpeg",
+      "uri": "textures/island_tree_01_leaves_nor_gl_1k.jpg"
+    },
+    {
+      "name": "island_tree_01_leaves_diff-island_tree_01_leaves_alpha",
+      "mimeType": "image/jpeg",
+      "uri": "textures/island_tree_01_leaves_diff_1k.jpg"
+    },
+    {
+      "name": "island_tree_01_leaves_rough",
+      "mimeType": "image/jpeg",
+      "uri": "textures/island_tree_01_leaves_arm_1k.jpg"
+    },
+    {
+      "name": "island_tree_01_branches_nor_gl",
+      "mimeType": "image/jpeg",
+      "uri": "textures/island_tree_01_branches_nor_gl_1k.jpg"
+    },
+    {
+      "name": "island_tree_01_branches_diff",
+      "mimeType": "image/jpeg",
+      "uri": "textures/island_tree_01_branches_diff_1k.jpg"
+    },
+    {
+      "name": "island_tree_01_branches_rough",
+      "mimeType": "image/jpeg",
+      "uri": "textures/island_tree_01_branches_arm_1k.jpg"
+    }
+  ],
+  "buffers": [
+    {
+      "uri": "island_tree_01.bin",
+      "byteLength": 10389476
     }
   ],
   "materials": [
     {
-      "doubleSided": true,
       "name": "island_tree_01",
-      "normalTexture": {
-        "index": 0
-      },
+      "doubleSided": true,
       "pbrMetallicRoughness": {
-        "baseColorTexture": {
-          "index": 1
-        },
         "metallicFactor": 0,
+        "baseColorTexture": {
+          "index": 0
+        },
         "metallicRoughnessTexture": {
           "index": 2
         }
+      },
+      "normalTexture": {
+        "index": 1
       }
     },
     {
+      "name": "island_tree_01_leaves",
       "alphaMode": "BLEND",
       "doubleSided": true,
-      "name": "island_tree_01_leaves",
-      "normalTexture": {
-        "index": 3
-      },
       "pbrMetallicRoughness": {
-        "baseColorTexture": {
-          "index": 4
-        },
         "metallicFactor": 0,
+        "baseColorTexture": {
+          "index": 3
+        },
         "metallicRoughnessTexture": {
           "index": 5
         }
+      },
+      "normalTexture": {
+        "index": 4
       }
     },
     {
+      "name": "island_tree_01_branches",
       "doubleSided": true,
-      "extensions": {
-        "KHR_materials_specular": {
-          "specularFactor": 0.4100000262260437
+      "pbrMetallicRoughness": {
+        "metallicFactor": 0,
+        "baseColorTexture": {
+          "index": 6,
+          "extensions": {
+            "KHR_texture_transform": {
+              "offset": [
+                0,
+                -2.4000000953674316
+              ],
+              "scale": [
+                15,
+                3.4000000953674316
+              ]
+            }
+          }
         },
-        "KHR_materials_ior": {
-          "ior": 1.4500000476837158
+        "metallicRoughnessTexture": {
+          "index": 8,
+          "extensions": {
+            "KHR_texture_transform": {
+              "offset": [
+                0,
+                -2.4000000953674316
+              ],
+              "scale": [
+                15,
+                3.4000000953674316
+              ]
+            }
+          }
         }
       },
-      "name": "island_tree_01_branches",
       "normalTexture": {
+        "index": 7,
+        "scale": 0.5,
         "extensions": {
           "KHR_texture_transform": {
             "offset": [
@@ -83,41 +331,14 @@
               3.4000000953674316
             ]
           }
-        },
-        "index": 6,
-        "scale": 0.5
+        }
       },
-      "pbrMetallicRoughness": {
-        "baseColorTexture": {
-          "extensions": {
-            "KHR_texture_transform": {
-              "offset": [
-                0,
-                -2.4000000953674316
-              ],
-              "scale": [
-                15,
-                3.4000000953674316
-              ]
-            }
-          },
-          "index": 7
+      "extensions": {
+        "KHR_materials_ior": {
+          "ior": 1.4500000476837158
         },
-        "metallicFactor": 0,
-        "metallicRoughnessTexture": {
-          "extensions": {
-            "KHR_texture_transform": {
-              "offset": [
-                0,
-                -2.4000000953674316
-              ],
-              "scale": [
-                15,
-                3.4000000953674316
-              ]
-            }
-          },
-          "index": 8
+        "KHR_materials_specular": {
+          "specularFactor": 0.4100000262260437
         }
       }
     }
@@ -128,307 +349,58 @@
       "primitives": [
         {
           "attributes": {
-            "POSITION": 0,
-            "NORMAL": 1,
-            "TEXCOORD_0": 2
+            "POSITION": 3,
+            "NORMAL": 4,
+            "TEXCOORD_0": 5
           },
-          "indices": 3,
-          "material": 0
+          "mode": 4,
+          "material": 0,
+          "indices": 0
         },
         {
           "attributes": {
-            "POSITION": 4,
-            "NORMAL": 5,
-            "TEXCOORD_0": 6
+            "POSITION": 6,
+            "NORMAL": 7,
+            "TEXCOORD_0": 8
           },
-          "indices": 7,
-          "material": 1
+          "mode": 4,
+          "material": 1,
+          "indices": 1
         },
         {
           "attributes": {
-            "POSITION": 8,
-            "NORMAL": 9,
-            "TEXCOORD_0": 10
+            "POSITION": 9,
+            "NORMAL": 10,
+            "TEXCOORD_0": 11
           },
-          "indices": 11,
-          "material": 2
+          "mode": 4,
+          "material": 2,
+          "indices": 2
         }
       ]
     }
   ],
-  "textures": [
+  "nodes": [
     {
-      "sampler": 0,
-      "source": 0
-    },
-    {
-      "sampler": 0,
-      "source": 1
-    },
-    {
-      "sampler": 0,
-      "source": 2
-    },
-    {
-      "sampler": 0,
-      "source": 3
-    },
-    {
-      "sampler": 0,
-      "source": 4
-    },
-    {
-      "sampler": 0,
-      "source": 5
-    },
-    {
-      "sampler": 0,
-      "source": 6
-    },
-    {
-      "sampler": 0,
-      "source": 7
-    },
-    {
-      "sampler": 0,
-      "source": 8
+      "name": "island_tree_01_LOD0",
+      "mesh": 0
     }
   ],
-  "images": [
+  "scenes": [
     {
-      "mimeType": "image/jpeg",
-      "name": "island_tree_01_nor_gl",
-      "uri": "textures/island_tree_01_nor_gl_1k.jpg"
-    },
-    {
-      "mimeType": "image/jpeg",
-      "name": "island_tree_01_diff",
-      "uri": "textures/island_tree_01_diff_1k.jpg"
-    },
-    {
-      "mimeType": "image/jpeg",
-      "name": "island_tree_01_rough",
-      "uri": "textures/island_tree_01_arm_1k.jpg"
-    },
-    {
-      "mimeType": "image/jpeg",
-      "name": "island_tree_01_leaves_nor_gl",
-      "uri": "textures/island_tree_01_leaves_nor_gl_1k.jpg"
-    },
-    {
-      "mimeType": "image/jpeg",
-      "name": "island_tree_01_leaves_diff-island_tree_01_leaves_alpha",
-      "uri": "textures/island_tree_01_leaves_diff_1k.jpg"
-    },
-    {
-      "mimeType": "image/jpeg",
-      "name": "island_tree_01_leaves_rough",
-      "uri": "textures/island_tree_01_leaves_arm_1k.jpg"
-    },
-    {
-      "mimeType": "image/jpeg",
-      "name": "island_tree_01_branches_nor_gl",
-      "uri": "textures/island_tree_01_branches_nor_gl_1k.jpg"
-    },
-    {
-      "mimeType": "image/jpeg",
-      "name": "island_tree_01_branches_diff",
-      "uri": "textures/island_tree_01_branches_diff_1k.jpg"
-    },
-    {
-      "mimeType": "image/jpeg",
-      "name": "island_tree_01_branches_rough",
-      "uri": "textures/island_tree_01_branches_arm_1k.jpg"
+      "name": "Scene",
+      "nodes": [
+        0
+      ]
     }
   ],
-  "accessors": [
-    {
-      "bufferView": 0,
-      "componentType": 5126,
-      "count": 19345,
-      "max": [
-        1.7236499786376953,
-        3.5607376098632812,
-        1.2547868490219116
-      ],
-      "min": [
-        -1.4278439283370972,
-        -0.020327899605035782,
-        -1.7317125797271729
-      ],
-      "type": "VEC3"
-    },
-    {
-      "bufferView": 1,
-      "componentType": 5126,
-      "count": 19345,
-      "type": "VEC3"
-    },
-    {
-      "bufferView": 2,
-      "componentType": 5126,
-      "count": 19345,
-      "type": "VEC2"
-    },
-    {
-      "bufferView": 3,
-      "componentType": 5123,
-      "count": 104361,
-      "type": "SCALAR"
-    },
-    {
-      "bufferView": 4,
-      "componentType": 5126,
-      "count": 927528,
-      "max": [
-        2.4107038974761963,
-        5.0071187019348145,
-        2.2341415882110596
-      ],
-      "min": [
-        -2.3444457054138184,
-        0.6301747560501099,
-        -2.583538055419922
-      ],
-      "type": "VEC3"
-    },
-    {
-      "bufferView": 5,
-      "componentType": 5126,
-      "count": 927528,
-      "type": "VEC3"
-    },
-    {
-      "bufferView": 6,
-      "componentType": 5126,
-      "count": 927528,
-      "type": "VEC2"
-    },
-    {
-      "bufferView": 7,
-      "componentType": 5125,
-      "count": 3180096,
-      "type": "SCALAR"
-    },
-    {
-      "bufferView": 8,
-      "componentType": 5126,
-      "count": 357055,
-      "max": [
-        2.3549556732177734,
-        4.951547622680664,
-        2.202267646789551
-      ],
-      "min": [
-        -2.3148062229156494,
-        0.649992048740387,
-        -2.542656898498535
-      ],
-      "type": "VEC3"
-    },
-    {
-      "bufferView": 9,
-      "componentType": 5126,
-      "count": 357055,
-      "type": "VEC3"
-    },
-    {
-      "bufferView": 10,
-      "componentType": 5126,
-      "count": 357055,
-      "type": "VEC2"
-    },
-    {
-      "bufferView": 11,
-      "componentType": 5125,
-      "count": 1513752,
-      "type": "SCALAR"
-    }
+  "scene": 0,
+  "extensionsUsed": [
+    "KHR_materials_ior",
+    "KHR_materials_specular",
+    "KHR_texture_transform"
   ],
-  "bufferViews": [
-    {
-      "buffer": 0,
-      "byteLength": 232140,
-      "byteOffset": 0,
-      "target": 34962
-    },
-    {
-      "buffer": 0,
-      "byteLength": 232140,
-      "byteOffset": 232140,
-      "target": 34962
-    },
-    {
-      "buffer": 0,
-      "byteLength": 154760,
-      "byteOffset": 464280,
-      "target": 34962
-    },
-    {
-      "buffer": 0,
-      "byteLength": 208722,
-      "byteOffset": 619040,
-      "target": 34963
-    },
-    {
-      "buffer": 0,
-      "byteLength": 11130336,
-      "byteOffset": 827764,
-      "target": 34962
-    },
-    {
-      "buffer": 0,
-      "byteLength": 11130336,
-      "byteOffset": 11958100,
-      "target": 34962
-    },
-    {
-      "buffer": 0,
-      "byteLength": 7420224,
-      "byteOffset": 23088436,
-      "target": 34962
-    },
-    {
-      "buffer": 0,
-      "byteLength": 12720384,
-      "byteOffset": 30508660,
-      "target": 34963
-    },
-    {
-      "buffer": 0,
-      "byteLength": 4284660,
-      "byteOffset": 43229044,
-      "target": 34962
-    },
-    {
-      "buffer": 0,
-      "byteLength": 4284660,
-      "byteOffset": 47513704,
-      "target": 34962
-    },
-    {
-      "buffer": 0,
-      "byteLength": 2856440,
-      "byteOffset": 51798364,
-      "target": 34962
-    },
-    {
-      "buffer": 0,
-      "byteLength": 6055008,
-      "byteOffset": 54654804,
-      "target": 34963
-    }
-  ],
-  "samplers": [
-    {
-      "magFilter": 9729,
-      "minFilter": 9987
-    }
-  ],
-  "buffers": [
-    {
-      "byteLength": 60709812,
-      "uri": "island_tree_01.bin"
-    }
+  "extensionsRequired": [
+    "KHR_texture_transform"
   ]
 }

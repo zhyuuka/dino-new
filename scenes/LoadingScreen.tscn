@@ -53,7 +53,7 @@ offset_right = 300.0
 offset_bottom = 42.0
 grow_horizontal = 2
 grow_vertical = 2
-text = "0% · 正在生成地形…"
+text = "0% · 正在准备资源…"
 horizontal_alignment = 1
 vertical_alignment = 1
 
