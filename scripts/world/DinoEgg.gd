@@ -11,13 +11,14 @@ signal hatched(species_id: String, pos: Vector3)
 
 const HATCH_TIME_AI: float = 45.0    # AI 蛋自动孵化计时（秒）
 const RETRY_DELAY: float = 20.0      # 孵化被拒后的重试间隔（秒）
-const MAX_EGGS_ON_FIELD: int = 10    # 同屏蛋数守卫：孵化瞬间自查，超限延后重试
+const MAX_EGGS_ON_FIELD: int = 10    # 同屏 AI 蛋数守卫：孵化瞬间自查，超限延后重试（玩家蛋不占名额）
 const MAX_HP: int = 2                # 被咬 2 口破坏
 
 # 由产蛋方在挂树前赋值
 var species_id: String = DinoSpecies.ID_RAPTOR
 var owner_player: bool = false       # true = 玩家的蛋（不自动孵化，死亡后从蛋重生）
 var growth_stage_snapshot: int = 0   # 玩家蛋：产蛋瞬间玩家的成长阶段快照
+var from_generation: int = 1         # 玩家蛋：所属代际（AI 蛋无意义）；重生时取代际最大者为最新锚点
 
 var hatch_timer: float = HATCH_TIME_AI
 var hp: int = MAX_HP
@@ -44,10 +45,16 @@ func _process(delta: float) -> void:
 		_try_hatch()
 
 
-## 孵化守卫：同屏蛋数超限（>10）则延后重试、不广播；
+## 孵化守卫：只统计 AI 蛋（玩家蛋是跨代重生锚点，不占孵化名额）。
+## 同屏 AI 蛋超限（>10）则延后重试、不广播；
 ## 否则广播 hatched，成败由 Main 回传决定（满员 → notify_hatch_failed；成功 → Main 销毁蛋）
 func _try_hatch() -> void:
-	if get_tree().get_nodes_in_group(Groups.EGG).size() > MAX_EGGS_ON_FIELD:
+	var ai_egg_count: int = 0
+	for n in get_tree().get_nodes_in_group(Groups.EGG):
+		var e := n as DinoEgg
+		if e != null and not e.owner_player:
+			ai_egg_count += 1
+	if ai_egg_count > MAX_EGGS_ON_FIELD:
 		hatch_timer = RETRY_DELAY
 		return
 	_hatch_requested = true

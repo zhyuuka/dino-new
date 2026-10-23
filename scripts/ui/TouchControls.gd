@@ -22,9 +22,16 @@ const SFX_UI := preload("res://assets/audio/ui.wav")
 @onready var camera_button: Button = $Control/CameraButton
 @onready var look_zone: LookControl = $Control/LookZone
 var sfx: AudioStreamPlayer
+var _was_paused: bool = false   # 上一帧的暂停状态（用于检测 false→true 的上升沿）
 
 
 func _ready() -> void:
+	# 本层设为 ALWAYS：暂停时 _process 仍运行，才能检测暂停沿并复位输入状态。
+	# 摇杆 / 视角区 / 按钮显式改回 PAUSABLE：暂停中它们照常停止，不再响应触摸
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	var pausable_controls: Array[Node] = [joystick, look_zone, bite_button, jump_button, ability_button, drink_button, camera_button]
+	for n: Node in pausable_controls:
+		n.process_mode = Node.PROCESS_MODE_PAUSABLE
 	sfx = AudioStreamPlayer.new()
 	sfx.volume_db = -6.0
 	add_child(sfx)
@@ -51,6 +58,29 @@ func _ui() -> void:
 	if sfx != null and is_instance_valid(sfx):
 		sfx.stream = SFX_UI
 		sfx.play()
+
+
+func _process(_delta: float) -> void:
+	# 暂停会停掉触摸事件派发：按钮的 button_up 与摇杆/视角区的抬起事件丢失，
+	# touch_index / 咬键长按 / 饮水键电平会残留，恢复后角色持续移动或叼尸。
+	# 只在 false→true 的上升沿复位一次（本层 ALWAYS + 子控件 PAUSABLE：
+	# 暂停中只运行这段复位逻辑，不再接收任何新输入）
+	var now_paused: bool = get_tree().paused
+	if now_paused and not _was_paused and is_processing():
+		_reset_input_state()
+	_was_paused = now_paused
+
+
+## 主动复位所有输入状态并向玩家广播归零（摇杆向量 / 视角增量 / 长按电平 / 饮水电平）
+func _reset_input_state() -> void:
+	joystick.touch_index = -1
+	joystick.stick_offset = Vector2.ZERO
+	joystick.queue_redraw()
+	look_zone._drag_index = -1
+	move_input_changed.emit(Vector2.ZERO)
+	look_input_changed.emit(Vector2.ZERO)
+	bite_hold_changed.emit(false)
+	drink_pressed.emit(false)
 
 
 func _on_joystick_input(vec: Vector2) -> void:

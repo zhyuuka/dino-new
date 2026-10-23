@@ -37,6 +37,9 @@ var _map_def: Maps.MapDef
 
 # 运行期状态
 var is_over: bool = false
+# 世界是否已完整生成：false 期间（选图/选种/加载中）跳过补员、计分与技能显示，
+# 避免地形未生成时把 AI 刷进虚空、以及访问尚未创建的 HUD/触屏节点
+var _game_started: bool = false
 
 # 开局选图/选种界面（选中后必须释放，避免残留叠在游戏画面上）
 var map_select: MapSelect
@@ -200,6 +203,8 @@ func _start_game(species_id: String, is_continue: bool) -> void:
 
 	# 触屏与新手引导（依赖玩家已就绪，故放在最后）
 	_spawn_touch_controls()
+	# 世界与运行期节点全部就绪，开启 _process 中的补员/计分/技能通道
+	_game_started = true
 	hud.show_hint("管理好饥饿/口渴/体力。靠近湖泊按 E 或饮水键喝水，吃对的食物会成长。")
 	hud.show_help()
 
@@ -296,19 +301,37 @@ func _on_egg_hatched(species_id: String, pos: Vector3, egg: DinoEgg) -> void:
 		egg.notify_hatch_failed()
 
 
-## 玩家产蛋：挂到动态容器。蛋是“跨代”资产：_restart_run 的释放清单不动蛋，
+## 玩家产蛋：写入当前代际并挂到动态容器。蛋是“跨代”资产：_restart_run 的释放清单不动蛋，
 ## 玩家死亡后从自己的蛋重生（见 _restart_run 第 3.5 步）
 func _on_player_egg_laid(egg: DinoEgg) -> void:
-	dynamic.add_child(egg)
-
-
-## 找一枚玩家自己的蛋（跨代重生锚点；多枚时取先扫到的一枚）
-func _find_player_egg() -> DinoEgg:
+	# 玩家产蛋方（PlayerDino）不感知代际编号之外的编排信息，由 Main 补写代际标记：
+	# _find_player_egg 以 from_generation 最大者作为最新重生锚点
+	egg.from_generation = player.generation if player != null and is_instance_valid(player) else 1
+	# 玩家蛋上限 3：极端情况下（一局内连续产蛋 / 多代未消费）先销毁最旧的一枚再挂新的，
+	# 避免玩家蛋无限堆积（同代际并列时取扫描到的第一枚）
+	var player_eggs: Array[DinoEgg] = []
 	for n in get_tree().get_nodes_in_group(Groups.EGG):
 		var e := n as DinoEgg
 		if e != null and e.owner_player:
-			return e
-	return null
+			player_eggs.append(e)
+	if player_eggs.size() >= 3:
+		var oldest: DinoEgg = player_eggs[0]
+		for e in player_eggs:
+			if e.from_generation < oldest.from_generation:
+				oldest = e
+		oldest.queue_free()
+	dynamic.add_child(egg)
+
+
+## 找最新的一枚玩家自己的蛋（跨代重生锚点）：按 from_generation 取最大者
+func _find_player_egg() -> DinoEgg:
+	var best: DinoEgg = null
+	for n in get_tree().get_nodes_in_group(Groups.EGG):
+		var e := n as DinoEgg
+		if e != null and e.owner_player:
+			if best == null or e.from_generation > best.from_generation:
+				best = e
+	return best
 
 
 # ================= 信号 =================
@@ -414,6 +437,8 @@ func _restart_run() -> void:
 	# 2) 重置运行期状态（day_t 保持不动：世界时间连续更自然）
 	score_keeper.reset_all()
 	is_over = false
+	# 世界资产自开局起已完整，重开后保持 _process 的补员/计分/技能通道开启
+	_game_started = true
 	# 3) 从存档读回成长（死亡时已写盘：generation 已 +1）
 	var d: Dictionary = SaveManager.load_save()
 	var sid: String = d.get("species_id", DinoSpecies.ID_RAPTOR)
@@ -426,11 +451,16 @@ func _restart_run() -> void:
 	if egg != null:
 		spawn_pos = egg.global_position
 		stage = maxi(stage, egg.growth_stage_snapshot)
+	# 只消费最新一枚作为重生锚点：登记完出生点后，连同其余旧蛋一并销毁，
+	# 避免多代累积的旧蛋永久占位并计入蛋总数
+	for n in get_tree().get_nodes_in_group(Groups.EGG):
+		var e := n as DinoEgg
+		if e != null and e.owner_player:
+			e.queue_free()
 	# 4) 复用现成生成函数重建运行期角色与 UI（顺序与 _start_game 一致）
 	_spawn_hud()
 	_spawn_player(sid, stage, gen, spawn_pos)
 	if egg != null:
-		egg.queue_free()  # 蛋已孵化出“你”：消费这枚跨代资产
 		hud.show_banner("从蛋中诞生！第 %d 代" % gen)
 	director.spawn_roster(stage)
 	_spawn_random_events()
@@ -462,19 +492,23 @@ func _on_menu() -> void:
 func _process(delta: float) -> void:
 	if is_over:
 		return
-	# 计分累计，每 0.5 秒刷新一次 HUD 分数
-	if score_keeper.tick(delta):
-		var gen: int = player.generation if player != null else 1
-		# hud 在选图/选种界面期间尚未生成，需判空
-		if hud != null:
-			hud.set_score(int(score_keeper.survival_time), score_keeper.kill_count, gen)
-		# 成就：存活满 5 分钟（随计分 tick 判定；unlock 幂等）
-		if score_keeper.survival_time >= 300.0:
-			Achievements.unlock("survival_300")
-	# 昼夜循环
+	# 选图/选种/加载期间世界尚未就绪：补员会把 AI 刷在未生成的地形上（y=1.5）掉入虚空，
+	# 计分与技能显示也依赖玩家/HUD/触屏节点，故统一由 _game_started 门禁跳过。
+	if _game_started:
+		# 计分累计，每 0.5 秒刷新一次 HUD 分数
+		if score_keeper.tick(delta):
+			var gen: int = player.generation if player != null else 1
+			# hud 在选图/选种界面期间尚未生成，需判空
+			if hud != null:
+				hud.set_score(int(score_keeper.survival_time), score_keeper.kill_count, gen)
+			# 成就：存活满 5 分钟（随计分 tick 判定；unlock 幂等）
+			if score_keeper.survival_time >= 300.0:
+				Achievements.unlock("survival_300")
+		# 生态维护：种群补员与传说霸主重生
+		director.maintain_population(delta, player.growth_stage if player != null else 0)
+		# 技能冷却显示（仅冲锋物种）；touch_controls 在加载分帧期间尚未创建，需判空
+		if player != null and is_instance_valid(player) and player.has_charge_ability():
+			if touch_controls != null and is_instance_valid(touch_controls):
+				touch_controls.set_ability_cooldown(player.charge_cooldown_timer, PlayerDino.CHARGE_COOLDOWN)
+	# 昼夜循环：菜单背景也保留昼夜变化，始终推进
 	day_night.update(delta)
-	# 生态维护：种群补员与传说霸主重生
-	director.maintain_population(delta, player.growth_stage if player != null else 0)
-	# 技能冷却显示（仅冲锋物种）
-	if player != null and is_instance_valid(player) and player.has_charge_ability():
-		touch_controls.set_ability_cooldown(player.charge_cooldown_timer, PlayerDino.CHARGE_COOLDOWN)

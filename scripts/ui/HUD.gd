@@ -33,6 +33,13 @@ var _last_hint: String = ""
 var _pause_menu: PauseMenu
 var _is_dead: bool = false
 
+# 横幅 tween：新横幅必须先杀掉旧的，否则旧 tween 尾部的 visible=false 回调会把新横幅提前隐藏
+var _banner_tween: Tween = null
+# 成就横幅排队：事件横幅优先；正有横幅显示时成就暂存于此，延后 2.5 秒再播
+# （并发解锁极少，用单变量 pending 即可，后到的成就覆盖先到的）
+var _achievement_pending: String = ""
+var _achievement_timer: Timer = null
+
 # 常驻目标条（代码动态构建，见 _build_objective_bar）
 var _objective_panel: PanelContainer
 var _objective_label: Label
@@ -58,6 +65,11 @@ func _ready() -> void:
 	# 成就解锁横幅：Achievements autoload 在本节点 _ready 前已就绪，直接连接；
 	# 死亡重开重建 HUD 时旧实例随旧 HUD 释放，连接自动断开，不会重复
 	Achievements.achievement_unlocked.connect(_on_achievement_unlocked)
+	# 成就横幅的延后播放计时器（一次性）：等事件横幅播完再显示成就，避免同帧覆盖
+	_achievement_timer = Timer.new()
+	_achievement_timer.one_shot = true
+	_achievement_timer.timeout.connect(_flush_achievement_banner)
+	add_child(_achievement_timer)
 	# 暂停菜单：HUD 持有并实例化；其回主菜单请求转发给既有的 menu_pressed（Main 侧零改动）
 	_pause_menu = PauseMenu.new()
 	_pause_menu.exit_to_menu.connect(func(): menu_pressed.emit())
@@ -116,13 +128,16 @@ func set_score(time_sec: int, kills: int, generation: int) -> void:
 
 
 func show_banner(text: String) -> void:
+	# 先杀掉上一条横幅的 tween：否则旧 tween 的淡出与 visible=false 回调会作用到新横幅上
+	if _banner_tween != null and _banner_tween.is_valid():
+		_banner_tween.kill()
 	banner.text = text
 	banner.visible = true
 	banner.modulate.a = 1.0
-	var t: Tween = create_tween()
-	t.tween_interval(1.8)
-	t.tween_property(banner, "modulate:a", 0.0, 0.6)
-	t.tween_callback(func(): banner.visible = false)
+	_banner_tween = create_tween()
+	_banner_tween.tween_interval(1.8)
+	_banner_tween.tween_property(banner, "modulate:a", 0.0, 0.6)
+	_banner_tween.tween_callback(func(): banner.visible = false)
 
 
 func show_hint(text: String) -> void:
@@ -190,6 +205,8 @@ func _build_objective_bar() -> void:
 	sb.content_margin_bottom = 4.0
 	_objective_panel.add_theme_stylebox_override("panel", sb)
 	var lbl := Label.new()
+	# 只做显示，不参与触摸拾取（HUD 层已高于触屏层，不能吞掉视角拖动）
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	lbl.add_theme_font_size_override("font_size", 16)
@@ -225,5 +242,22 @@ func clear_objective() -> void:
 
 # ================= 成就横幅 =================
 ## 成就解锁横幅（Achievements autoload 首次解锁时发出）
+## 随机事件 event_started 与成就可能同帧到达；事件横幅优先，成就延后 2.5 秒再展示，
+## 保证事件提示一定能被玩家看到（否则成就横幅会把它当场覆盖）
 func _on_achievement_unlocked(_id: String, title: String) -> void:
-	show_banner("成就解锁：%s" % title)
+	var text: String = "成就解锁：%s" % title
+	if banner.visible:
+		_achievement_pending = text
+		_achievement_timer.start(2.5)
+		return
+	_achievement_pending = ""
+	show_banner(text)
+
+
+## 延后计时到点：若仍有待播成就则展示（期间又来新成就则只播最后一条）
+func _flush_achievement_banner() -> void:
+	if _achievement_pending == "":
+		return
+	var text: String = _achievement_pending
+	_achievement_pending = ""
+	show_banner(text)

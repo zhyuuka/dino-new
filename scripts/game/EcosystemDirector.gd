@@ -74,9 +74,15 @@ func handle_ai_death(ai: AIDino, by_player: bool) -> void:
 	ai_died.emit(ai, by_player)
 
 
-## 释放全部 AI（死亡重开时调用；died 信号仅在各自 _die 中手动 emit，queue_free 不会触发副作用）
+## 释放全部 AI（死亡重开时调用；died 信号仅在各自 _die 中手动 emit，queue_free 不会触发副作用）。
+## queue_free 要等帧末才真正释放，而 _restart_run 在同一帧就 spawn_roster 放新玩家——
+## 旧 AI 这期间仍会执行物理帧去咬新玩家，故先摘出 AI 组并停掉物理处理再排队释放。
 func clear_all() -> void:
 	for ai in ai_dinos:
+		if not is_instance_valid(ai):
+			continue
+		ai.remove_from_group(Groups.AI)
+		ai.set_physics_process(false)
 		ai.queue_free()
 	ai_dinos.clear()
 	boss_ai = null
@@ -123,9 +129,10 @@ func _spawn_boss() -> void:
 	var ang: float = randf() * TAU
 	var pos: Vector3 = Vector3(sin(ang), 0.0, cos(ang)) * (radius - 20.0)
 	var by: float = _terrain.get_height(pos.x, pos.z) if _terrain != null else 1.5
-	ai.global_position = Vector3(pos.x, by + 0.2, pos.z)
 	ai.died.connect(handle_ai_death)
+	# 先入树再落位：不在树内写 global_position 会触发 is_inside_tree 报错
 	_parent.add_child(ai)
+	ai.global_position = Vector3(pos.x, by + 0.2, pos.z)
 	ai_dinos.append(ai)
 	boss_ai = ai
 	boss_spawned.emit()

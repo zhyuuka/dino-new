@@ -166,8 +166,12 @@ func glow() -> void:
 	if _corpse:
 		return
 	await get_tree().create_timer(1.0).timeout
+	# 等待期间可能已回主菜单/重开，本节点随之释放：恢复前先确认自身仍在树内
+	if not is_instance_valid(self) or not is_inside_tree():
+		return
 	for mi in _meshes:
-		(mi as MeshInstance3D).material_override = null
+		if is_instance_valid(mi):
+			(mi as MeshInstance3D).material_override = null
 
 
 ## 尸体淡出后回调

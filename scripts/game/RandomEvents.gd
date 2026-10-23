@@ -147,10 +147,12 @@ func _end_abundance() -> String:
 func _exit_tree() -> void:
 	if _state != State.ACTIVE:
 		return
+	# day_night / foliage_spawner 与动态容器同批释放，顺序可能先于本节点：
+	# 回滚前逐个 is_instance_valid 校验，避免访问已释放对象
 	match _active_kind:
 		EventKind.STORM:
-			if day_night != null:
+			if is_instance_valid(day_night):
 				day_night.set_storm(false)
 		EventKind.ABUNDANCE:
-			if foliage_spawner != null:
+			if is_instance_valid(foliage_spawner):
 				foliage_spawner.set_abundant(false)

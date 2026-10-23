@@ -11,6 +11,13 @@ const ResourcePointScene: PackedScene = preload("res://scenes/ResourcePoint.tscn
 
 const LAKE_RADIUS: float = 18.0
 
+# 自然物可见距离（米）：远超雾距后被剔除，省顶点/像素开销。
+# 依据：地图 128m 见方、默认雾密度 0.006～0.013，75m 处树石已近乎溶于雾色。
+const TREE_VIEW_DISTANCE: float = 75.0
+const TREE_VIEW_MARGIN: float = 10.0
+const ROCK_VIEW_DISTANCE: float = 65.0
+const ROCK_VIEW_MARGIN: float = 8.0
+
 # 巢穴与矿物盐的固定散布点（坐标为水平面位置，高度按地形落点计算）
 const NEST_POINTS: Array[Vector3] = [
 	Vector3(45.0, 0.0, 50.0),
@@ -51,9 +58,10 @@ func spawn_water(parent: Node3D, def: Maps.MapDef) -> void:
 	for i in def.water_points.size():
 		var wp := def.water_points[i] as Vector3
 		var w: WaterSource = WaterScene.instantiate() as WaterSource
-		w.global_position = Vector3(wp.x, def.water_level, wp.z)
 		w.radius = radii[i] if i < radii.size() else 10.0
+		# 必须先入树再设 global_position：不在树内取全局变换会触发 is_inside_tree 报错
 		parent.add_child(w)
+		w.global_position = Vector3(wp.x, def.water_level, wp.z)
 
 
 ## 生成植被撒布器（按地图预设的植物模型与数量），返回撒布器引用
@@ -94,9 +102,10 @@ func spawn_nature(parent: Node3D, def: Maps.MapDef, terrain: TerrainGenerator, c
 			continue  # 出生点附近留空
 		var slug: String = def.tree_models[rng.randi() % def.tree_models.size()]
 		var s: float = rng.randf_range(0.8, 1.3)
-		var p := NatureProp.create(slug, s, 0.0)
-		p.global_position = Vector3(x, terrain.get_height(x, z), z)
+		var p := NatureProp.create(slug, s, 0.0, TREE_VIEW_DISTANCE, TREE_VIEW_MARGIN)
+		# 先入树再落位：节点不在树内时写 global_position 会走 is_inside_tree 报错分支
 		parent.add_child(p)
+		p.global_position = Vector3(x, terrain.get_height(x, z), z)
 	# 岩石
 	for i in def.rock_count:
 		if chunk_await > 0 and done > 0 and done % chunk_await == 0:
@@ -112,9 +121,9 @@ func spawn_nature(parent: Node3D, def: Maps.MapDef, terrain: TerrainGenerator, c
 			continue
 		var slug: String = def.rock_models[rng.randi() % def.rock_models.size()]
 		var s: float = rng.randf_range(0.6, 1.8)
-		var p := NatureProp.create(slug, s, 0.0)
-		p.global_position = Vector3(x, terrain.get_height(x, z), z)
+		var p := NatureProp.create(slug, s, 0.0, ROCK_VIEW_DISTANCE, ROCK_VIEW_MARGIN)
 		parent.add_child(p)
+		p.global_position = Vector3(x, terrain.get_height(x, z), z)
 	if on_progress.is_valid():
 		on_progress.call(total, total)
 
@@ -127,13 +136,13 @@ func spawn_resource_points(parent: Node3D, terrain: TerrainGenerator) -> void:
 		var rp: ResourcePoint = ResourcePointScene.instantiate() as ResourcePoint
 		rp.point_type = ResourcePoint.Type.NEST
 		var y: float = terrain.get_height(pos.x, pos.z) if terrain != null else 0.0
-		rp.global_position = Vector3(pos.x, y, pos.z)
 		parent.add_child(rp)
+		rp.global_position = Vector3(pos.x, y, pos.z)
 	for pos in LICK_POINTS:
 		if terrain != null and terrain.is_under_water(pos.x, pos.z):
 			continue
 		var rp: ResourcePoint = ResourcePointScene.instantiate() as ResourcePoint
 		rp.point_type = ResourcePoint.Type.LICK
 		var y: float = terrain.get_height(pos.x, pos.z) if terrain != null else 0.0
-		rp.global_position = Vector3(pos.x, y, pos.z)
 		parent.add_child(rp)
+		rp.global_position = Vector3(pos.x, y, pos.z)

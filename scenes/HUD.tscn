@@ -4,6 +4,7 @@
 [ext_resource type="Script" path="res://scripts/ui/Minimap.gd" id="2_minimap"]
 
 [node name="HUD" type="CanvasLayer"]
+layer = 2
 script = ExtResource("1_hud")
 
 [node name="Control" type="Control" parent="."]
@@ -12,12 +13,14 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 2
 
 [node name="HealthBar" type="ProgressBar" parent="Control"]
 offset_left = 12.0
 offset_top = 12.0
 offset_right = 172.0
 offset_bottom = 30.0
+mouse_filter = 2
 show_percentage = false
 
 [node name="HealthLabel" type="Label" parent="Control/HealthBar"]
@@ -29,6 +32,7 @@ anchor_right = 0.5
 anchor_bottom = 0.5
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 2
 text = "血"
 
 [node name="HungerBar" type="ProgressBar" parent="Control"]
@@ -36,6 +40,7 @@ offset_left = 12.0
 offset_top = 38.0
 offset_right = 172.0
 offset_bottom = 56.0
+mouse_filter = 2
 show_percentage = false
 
 [node name="HungerLabel" type="Label" parent="Control/HungerBar"]
@@ -47,6 +52,7 @@ anchor_right = 0.5
 anchor_bottom = 0.5
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 2
 text = "饿"
 
 [node name="ThirstBar" type="ProgressBar" parent="Control"]
@@ -54,6 +60,7 @@ offset_left = 12.0
 offset_top = 64.0
 offset_right = 172.0
 offset_bottom = 82.0
+mouse_filter = 2
 show_percentage = false
 
 [node name="ThirstLabel" type="Label" parent="Control/ThirstBar"]
@@ -65,6 +72,7 @@ anchor_right = 0.5
 anchor_bottom = 0.5
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 2
 text = "渴"
 
 [node name="StaminaBar" type="ProgressBar" parent="Control"]
@@ -72,6 +80,7 @@ offset_left = 12.0
 offset_top = 90.0
 offset_right = 172.0
 offset_bottom = 108.0
+mouse_filter = 2
 show_percentage = false
 
 [node name="StaminaLabel" type="Label" parent="Control/StaminaBar"]
@@ -83,6 +92,7 @@ anchor_right = 0.5
 anchor_bottom = 0.5
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 2
 text = "力"
 
 [node name="GrowthLabel" type="Label" parent="Control"]
@@ -95,6 +105,7 @@ offset_left = -168.0
 offset_top = 12.0
 offset_right = -118.0
 offset_bottom = 28.0
+mouse_filter = 2
 text = "成长"
 
 [node name="GrowthBar" type="ProgressBar" parent="Control"]
@@ -107,6 +118,7 @@ offset_left = -110.0
 offset_top = 12.0
 offset_right = 110.0
 offset_bottom = 28.0
+mouse_filter = 2
 show_percentage = false
 
 [node name="StageLabel" type="Label" parent="Control/GrowthBar"]
@@ -118,6 +130,7 @@ anchor_right = 0.5
 anchor_bottom = 0.5
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 2
 text = "幼体"
 
 [node name="SpeciesLabel" type="Label" parent="Control"]
@@ -130,6 +143,7 @@ offset_left = -260.0
 offset_top = 12.0
 offset_right = -12.0
 offset_bottom = 34.0
+mouse_filter = 2
 text = "物种"
 horizontal_alignment = 2
 
@@ -143,6 +157,7 @@ offset_left = -260.0
 offset_top = 40.0
 offset_right = -12.0
 offset_bottom = 62.0
+mouse_filter = 2
 text = "计分"
 horizontal_alignment = 2
 
@@ -168,6 +183,7 @@ offset_left = -300.0
 offset_top = -120.0
 offset_right = 300.0
 offset_bottom = -60.0
+mouse_filter = 2
 text = ""
 horizontal_alignment = 1
 vertical_alignment = 1
@@ -183,6 +199,7 @@ offset_left = -250.0
 offset_top = -42.0
 offset_right = 250.0
 offset_bottom = -14.0
+mouse_filter = 2
 text = ""
 horizontal_alignment = 1
 autowrap_mode = 2
@@ -193,6 +210,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 2
 color = Color(0, 0, 0, 0.6)
 
 [node name="DeathLabel" type="Label" parent="Control/DeathPanel"]
@@ -204,6 +222,7 @@ anchor_right = 0.5
 anchor_bottom = 0.5
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 2
 text = ""
 horizontal_alignment = 1
 vertical_alignment = 1
@@ -219,6 +238,7 @@ offset_left = -152.0
 offset_top = 112.0
 offset_right = -12.0
 offset_bottom = 252.0
+mouse_filter = 2
 script = ExtResource("2_minimap")
 
 [node name="HelpPanel" type="Control" parent="Control"]
@@ -227,6 +247,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 2
 
 [node name="Backdrop" type="ColorRect" parent="Control/HelpPanel"]
 anchors_preset = 15
@@ -234,8 +255,8 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0, 0, 0, 0.72)
 mouse_filter = 2
+color = Color(0, 0, 0, 0.72)
 
 [node name="HelpLabel" type="RichTextLabel" parent="Control/HelpPanel"]
 anchors_preset = 8
@@ -247,6 +268,7 @@ offset_left = -300.0
 offset_top = -280.0
 offset_right = 300.0
 offset_bottom = 30.0
+mouse_filter = 2
 bbcode_enabled = true
 text = "[center][b][font_size=26]恐龙生存 · 上手指南[/font_size][/b][/center]\n\n[font_size=20]● [b]左摇杆[/b]：移动\n● [b]右半屏拖动[/b]：转动视角\n● [b]咬[/b]：攻击 / 进食\n● [b]跳[/b]：跳跃\n● [b]技能[/b]：冲锋（仅部分恐龙）\n● [b]喝水[/b]：靠近水源长按\n\n[b]目标[/b]：捕食、进食成长，躲开更大的肉食恐龙。\n[b]小地图[/b]：蓝=水源  黄=资源  红=肉食  绿=草食[/font_size]"
 

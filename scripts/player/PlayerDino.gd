@@ -124,16 +124,27 @@ var charge_timer: float = 0.0
 var charged_targets: Array = []
 var pack_bonus: bool = false
 
+# 生存数值 float 累加器：物理步长 1/60 时 int(速率 * delta) 恒为 0（45/60=0.75、22/60=0.37），
+# 改为 float 累积满 1.0 才结算整数增减，余数留在累加器里，长时间平均速率与原设计一致
+var _hunger_acc: float = 0.0
+var _thirst_acc: float = 0.0
+var _stamina_acc: float = 0.0
+var _drink_acc: float = 0.0
+
+# 上一帧已广播的整数值：只在整数真的变化时才 emit，避免 HUD 每物理帧重写 Label
+var _last_hunger: int = -1
+var _last_thirst: int = -1
+var _last_stamina: int = -1
+
 # 尸体拖拽状态
 var _dragged_corpse: AICorpse = null   # 正在叼住的尸体（null = 未叼）
+var _dragged_corpse_layer: int = 0     # 叼住时尸体的原始 collision_layer（放下时恢复）
 var _touch_bite_hold: bool = false     # 触屏咬键长按电平（TouchControls.bite_hold_changed 桥接）
 var _bite_hold_consumed: bool = false  # 本次按住会话已叼过/已失效：防"放下后按住未松立刻重叼"
 var _drag_scan_timer: float = DRAG_SCAN_INTERVAL  # 叼取扫描节流计时（初值=首扫延迟：长按 0.2s 后才叼取，轻点咬击不误叼）
 var _terrain_ref: TerrainGenerator = null  # 地形引用缓存（Main 未注入本脚本，惰性按类型查找一次）
 
 # 衰减计时器
-var hunger_timer: float = 0.0
-var thirst_timer: float = 0.0
 var starve_timer: float = 0.0
 var thirst_starve_timer: float = 0.0
 var current_hint: String = ""
@@ -199,9 +210,9 @@ func _ready() -> void:
 	spring_arm.add_excluded_object(get_rid())
 	# 初始信号
 	health_changed.emit(current_health, max_health)
-	hunger_changed.emit(current_hunger, HUNGER_MAX)
-	thirst_changed.emit(current_thirst, THIRST_MAX)
-	stamina_changed.emit(current_stamina, STAMINA_MAX)
+	_emit_hunger()
+	_emit_thirst()
+	_emit_stamina()
 	_growth_signal()
 	banner.emit("你是一只%s（%s）" % [species.name, DinoSpecies.stage_name(growth_stage)])
 
@@ -273,8 +284,11 @@ func _physics_process(delta: float) -> void:
 	if move_dir.length() > 0.01:
 		move_dir = move_dir.normalized()
 
-	# 咬键长按电平：触屏桥接 + 键盘 action 电平，两路输入统一驱动叼尸/拖拽
-	var bite_held: bool = _touch_bite_hold or Input.is_action_pressed("bite")
+	# 咬键长按电平：触屏桥接 + 键盘 J 物理键，两路输入统一驱动叼尸/拖拽。
+	# 不能读 "bite" 动作：该动作含鼠标左键，且项目开启了 emulate_touch_from_mouse，
+	# 桌面在右半屏拖视角时 "bite" 会持续为真 → 误触发自动叼尸/自动咬。
+	# 点按攻击仍走 _unhandled_input 的 "bite"（鼠标左键单击照常出嘴）。
+	var bite_held: bool = _touch_bite_hold or Input.is_physical_key_pressed(KEY_J)
 	if not bite_held:
 		_bite_hold_consumed = false
 	_update_dragging(delta, bite_held)
@@ -301,8 +315,10 @@ func _physics_process(delta: float) -> void:
 		else:
 			_do_charge_damage()
 
-	# 饮水：在水里按住饮水键（键盘 E 或触屏），移动减速且不能冲刺
-	var drink_held := Input.is_key_pressed(KEY_E) or touch_drink
+	# 饮水：在水里按住饮水键（独立动作 drink，默认键 E；触屏为饮水按钮），移动减速且不能冲刺。
+	# 饮水判定不再直接轮询物理键 KEY_E，改走 InputMap 动作层（可重绑定、与触屏按钮同语义）；
+	# cam_right 的 E 绑定按需求保留不动
+	var drink_held := Input.is_action_pressed("drink") or touch_drink
 	# 技能：键盘 F 边沿触发
 	if Input.is_key_pressed(KEY_F) and not _f_held:
 		try_ability()
@@ -310,8 +326,13 @@ func _physics_process(delta: float) -> void:
 	var drinking: bool = false
 	if drink_held and _is_in_water():
 		drinking = true
-		current_thirst = mini(current_thirst + int(DRINK_RATE * delta), THIRST_MAX)
-		thirst_changed.emit(current_thirst, THIRST_MAX)
+		# 45 点/秒按物理步长结算：小数部分累积到满 1 点才加到口渴上（int(45*delta) 恒为 0）
+		_drink_acc += DRINK_RATE * delta
+		if _drink_acc >= 1.0:
+			var gain: int = int(_drink_acc)
+			_drink_acc -= float(gain)
+			current_thirst = mini(current_thirst + gain, THIRST_MAX)
+			_emit_thirst()
 		speed *= DRINK_SLOW
 		_update_drink_hint(true)
 		if not _was_drinking:
@@ -365,15 +386,24 @@ func _physics_process(delta: float) -> void:
 # ================= 体力 =================
 func _update_stamina(delta: float, moving: bool) -> void:
 	var sprinting: bool = Input.is_action_pressed("sprint") and moving and can_sprint()
-	# 叼住尸体移动：体力按 1.5 倍速率流失（走/跑同款倍率，拖拽很费力）；原地叼住按常规回复
+	# 每秒变化率：负 = 消耗，正 = 回复。叼住尸体移动按 1.5 倍流失（走/跑同款倍率）；原地叼住按常规回复
+	var rate: float = STAMINA_REGEN
 	if _dragged_corpse != null and moving:
-		current_stamina = maxi(0, current_stamina - int(STAMINA_DRAIN * DRAG_STAMINA_MULT * delta))
+		rate = -STAMINA_DRAIN * DRAG_STAMINA_MULT
 	elif sprinting:
-		current_stamina = maxi(0, current_stamina - int(STAMINA_DRAIN * delta))
-	else:
-		current_stamina = mini(current_stamina + int(STAMINA_REGEN * delta), STAMINA_MAX)
+		rate = -STAMINA_DRAIN
+	# 小数部分留在累加器：22/60≈0.37 这种步长下 int(速率*delta) 恒为 0，会永不掉体力
+	_stamina_acc += rate * delta
+	if _stamina_acc >= 1.0:
+		var gain: int = int(_stamina_acc)
+		_stamina_acc -= float(gain)
+		current_stamina = mini(current_stamina + gain, STAMINA_MAX)
+	elif _stamina_acc <= -1.0:
+		var loss: int = int(_stamina_acc)   # int() 向零截断，不足 1 的余数继续留在累加器
+		_stamina_acc -= float(loss)
+		current_stamina = maxi(0, current_stamina + loss)
 	_post_stamina_check()
-	stamina_changed.emit(current_stamina, STAMINA_MAX)
+	_emit_stamina()
 
 func can_sprint() -> bool:
 	return current_stamina > 0 and not _exhausted
@@ -388,29 +418,53 @@ func _post_stamina_check() -> void:
 
 # ================= 生存数值衰减 =================
 func _update_vitals(delta: float, sprinting: bool) -> void:
-	# 饥饿
-	hunger_timer += delta
-	if hunger_timer >= HUNGER_INTERVAL:
-		hunger_timer -= HUNGER_INTERVAL
-		current_hunger = maxi(0, current_hunger - 1)
-		hunger_changed.emit(current_hunger, HUNGER_MAX)
+	# 饥饿：14s 掉 1 点。用 float 累加点数，满 1 才扣，余数保留（等价于原计时器，但不受物理步长取整影响）
+	_hunger_acc += delta / HUNGER_INTERVAL
+	if _hunger_acc >= 1.0:
+		var h: int = int(_hunger_acc)
+		_hunger_acc -= float(h)
+		current_hunger = maxi(0, current_hunger - h)
+		_emit_hunger()
 	if current_hunger <= 0:
 		starve_timer += delta
 		if starve_timer >= STARVE_INTERVAL:
 			starve_timer -= STARVE_INTERVAL
 			take_damage(STARVE_DAMAGE)
-	# 口渴（冲刺时消耗翻倍）
+	# 口渴（冲刺时消耗翻倍 → 每秒点数 = 1 / 间隔）
 	var ti: float = THIRST_INTERVAL * (THIRST_SPRINT_MULT if sprinting else 1.0)
-	thirst_timer += delta
-	if thirst_timer >= ti:
-		thirst_timer -= ti
-		current_thirst = maxi(0, current_thirst - 1)
-		thirst_changed.emit(current_thirst, THIRST_MAX)
+	_thirst_acc += delta / ti
+	if _thirst_acc >= 1.0:
+		var t: int = int(_thirst_acc)
+		_thirst_acc -= float(t)
+		current_thirst = maxi(0, current_thirst - t)
+		_emit_thirst()
 	if current_thirst <= 0:
 		thirst_starve_timer += delta
 		if thirst_starve_timer >= THIRST_STARVE_INTERVAL:
 			thirst_starve_timer -= THIRST_STARVE_INTERVAL
 			take_damage(THIRST_STARVE_DAMAGE)
+
+
+# ================= 数值广播（仅在整数变化时发信号，避免 HUD 每帧重排） =================
+func _emit_hunger() -> void:
+	if current_hunger == _last_hunger:
+		return
+	_last_hunger = current_hunger
+	hunger_changed.emit(current_hunger, HUNGER_MAX)
+
+
+func _emit_thirst() -> void:
+	if current_thirst == _last_thirst:
+		return
+	_last_thirst = current_thirst
+	thirst_changed.emit(current_thirst, THIRST_MAX)
+
+
+func _emit_stamina() -> void:
+	if current_stamina == _last_stamina:
+		return
+	_last_stamina = current_stamina
+	stamina_changed.emit(current_stamina, STAMINA_MAX)
 
 
 # ================= 摄像机 =================
@@ -553,6 +607,11 @@ func _update_dragging(delta: float, bite_held: bool) -> void:
 	if best != null:
 		_dragged_corpse = best
 		best.set_dragged(true)
+		# 尸体是 StaticBody3D（collision_layer = 4），玩家 collision_mask 含该层；叼在身前 2.2m 时
+		# 两者碰撞体重叠约 0.3m → 每帧被自己的尸体顶退抖动。叼住瞬间关闭尸体的碰撞层（记原值），
+		# 放下时恢复；尸体被 queue_free 后 is_instance_valid 为假，自然跳过恢复
+		_dragged_corpse_layer = best.collision_layer
+		best.collision_layer = 0
 		_bite_hold_consumed = true   # 本次按住只叼一次：点按放下后不会立刻自动重叼
 		banner.emit("叼起了尸体")
 		hint.emit("松开咬键放下尸体；再按咬键也可放下")
@@ -561,6 +620,8 @@ func _update_dragging(delta: float, bite_held: bool) -> void:
 ## 放下尸体（松开咬键 / 叼住时再按咬键 / 死亡），恢复其腐烂计时
 func _drop_corpse() -> void:
 	if _dragged_corpse != null and is_instance_valid(_dragged_corpse):
+		# 恢复叼住前的碰撞层，让尸体重新成为可站立的实体（已 queue_free 的尸体不可达，跳过）
+		_dragged_corpse.collision_layer = _dragged_corpse_layer
 		_dragged_corpse.set_dragged(false)
 		# 放下即收嘴：占住一次常规咬击冷却。触屏"松开放下"时 Button 会同帧补发
 		# bite_pressed（try_bite），不占冷却会把刚放下的尸体当场咬掉一口；
@@ -586,7 +647,7 @@ func _ground_y(x: float, z: float) -> float:
 ## 巢穴回体力（夹取并广播）
 func restore_stamina(amt: int) -> void:
 	current_stamina = mini(current_stamina + amt, STAMINA_MAX)
-	stamina_changed.emit(current_stamina, STAMINA_MAX)
+	_emit_stamina()
 
 
 # ================= 技能 =================
@@ -635,7 +696,7 @@ func _eat_meal(kind: String) -> void:
 			return
 		_sfx(SFX_EAT)
 		current_hunger = mini(current_hunger + MEAT_HUNGER, HUNGER_MAX)
-		hunger_changed.emit(current_hunger, HUNGER_MAX)
+		_emit_hunger()
 		heal(MEAT_HEAL)
 		_add_growth_meal()
 	elif kind == "plant":
@@ -644,8 +705,8 @@ func _eat_meal(kind: String) -> void:
 		_sfx(SFX_EAT)
 		current_hunger = mini(current_hunger + PLANT_HUNGER, HUNGER_MAX)
 		current_thirst = mini(current_thirst + PLANT_THIRST, THIRST_MAX)
-		hunger_changed.emit(current_hunger, HUNGER_MAX)
-		thirst_changed.emit(current_thirst, THIRST_MAX)
+		_emit_hunger()
+		_emit_thirst()
 		heal(PLANT_HEAL)
 		_add_growth_meal()
 
@@ -708,7 +769,7 @@ func _try_lay_egg() -> void:
 		return
 	lay_cooldown_timer = LAY_COOLDOWN
 	current_hunger = maxi(0, current_hunger - LAY_HUNGER_COST)
-	hunger_changed.emit(current_hunger, HUNGER_MAX)
+	_emit_hunger()
 	var egg := EGG_SCENE.instantiate() as DinoEgg
 	egg.species_id = species.id
 	egg.owner_player = true

@@ -11,7 +11,7 @@ config/description="3D 开放世界恐龙生存游戏 - Phase 1"
 run/main_scene="res://scenes/Main.tscn"
 config/features=PackedStringArray("4.4", "Forward Plus")
 config/icon="res://assets/icons/icon.svg"
-config/version="0.2.3"
+config/version="0.2.4"
 
 [display]
 
@@ -59,6 +59,11 @@ bite={
 "deadzone": 0.5,
 "events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":74,"key_label":0,"unicode":106,"echo":false,"script":null)
 , Object(InputEventMouseButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"button_mask":0,"position":Vector2(0, 0),"global_position":Vector2(0, 0),"factor":1.0,"button_index":1,"canceled":false,"pressed":false,"double_click":false,"script":null)
+]
+}
+drink={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":69,"key_label":0,"unicode":101,"echo":false,"script":null)
 ]
 }
 sprint={
@@ -113,8 +118,9 @@ pointing/emulate_mouse_from_touch=true
 renderer/rendering_method="mobile"
 renderer/rendering_method.mobile="mobile"
 environment/defaults/default_clear_color=Color(0.45, 0.65, 0.85, 1)
-anti_aliasing/quality/msaa_3d=2
+anti_aliasing/quality/msaa_3d=1
 textures/vram_compression/import_etc2_astc=true
+lights_and_shadows/directional_shadow/size=2048
 
 [autoload]
 

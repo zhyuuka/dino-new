@@ -1,11 +1,15 @@
 class_name TerrainGenerator
 extends Node3D
-## 程序化/高度图地形：生成带顶点着色的高度网格 + 三角网格碰撞，并提供 get_height() 供放置万物。
+## 程序化/高度图地形：生成带顶点着色的高度网格 + HeightMapShape3D 高度场碰撞，并提供 get_height() 供放置万物。
 ## 模式 0：FastNoiseLite 分形噪声；模式 1：采样下载的灰度高度图 PNG。
 
 const SEGMENTS: int = 128
 const CELL: float = 2.0
 var half_extent: float = SEGMENTS * CELL * 0.5   # 128
+
+## 物理高度图的采样点数。HeightMapShape3D 的格距固定 1 米（Godot 4.4 无 cell_size，且不支持非等比缩放），
+## 视觉网格却是 2 米格距，因此要把 129×129 升采样到 257×257 @1m：覆盖 -128..128 米、原点居中、物理面贴合视觉面。
+const COLLISION_SAMPLES: int = SEGMENTS * 2 + 1   # 257
 
 var _def: Maps.MapDef
 var _heights: PackedFloat32Array = []
@@ -128,8 +132,36 @@ func _build_mesh() -> void:
 	mi.material_override = mat
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(mi)
-	# Godot 4.4 的 HeightMapShape3D 无 cell_size（格距固定 1 米，非等比缩放不受物理支持），2 米格距对不上，保留三角网格碰撞，等引擎升级后再换
-	mi.create_trimesh_collision()
+	_build_collision()
+
+
+## 用 HeightMapShape3D 生成地形碰撞（替代 create_trimesh_collision）。
+## 内存约 257×257×4B ≈ 258KB，构建约 10ms；原三角网格碰撞约 3.2 万三角面、内存约 3MB。
+## 索引约定：map_data[j * map_width + i]，i 对应 x、j 对应 z；shape 以 CollisionShape3D 原点为中心，格距恒为 1m。
+## 回退方案（若升采样后角色贴地/跳跃异常）：删掉本函数里的 body 创建，改回 `mi.create_trimesh_collision()`。
+func _build_collision() -> void:
+	var n := COLLISION_SAMPLES
+	var data := PackedFloat32Array()
+	data.resize(n * n)
+	# i、j ∈ [0,256] → i-128、j-128 ∈ [-128,128]，正好是地形半边长（米），get_height 内部会 clamp 到合法格点
+	for j in n:
+		var z := float(j) - float(SEGMENTS)
+		for i in n:
+			var x := float(i) - float(SEGMENTS)
+			data[j * n + i] = get_height(x, z)
+	var shape := HeightMapShape3D.new()
+	shape.map_width = n
+	shape.map_depth = n
+	shape.map_data = data
+	var body := StaticBody3D.new()
+	body.name = "TerrainBody"
+	body.collision_layer = 1   # World 层（玩家/AI 的 collision_mask 依赖此层）
+	body.collision_mask = 1
+	var cs := CollisionShape3D.new()
+	cs.name = "TerrainShape"
+	cs.shape = shape
+	body.add_child(cs)
+	add_child(body)
 
 
 ## 双线性插值查询任意世界坐标的地形高度

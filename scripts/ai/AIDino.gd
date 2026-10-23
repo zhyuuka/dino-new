@@ -47,6 +47,8 @@ const LAY_COOLDOWN: float = 90.0           # 自身产蛋冷却(秒)
 const LAY_MAX_EGGS: int = 10               # 全场蛋数上限(含玩家蛋)
 const EGG_BITE_HUNGER: int = 10            # 偷蛋每口回复饥饿(蛋 2 口破)
 const EGG_BITE_HEAL: int = 2               # 偷蛋每口回复血量
+const OWN_EGG_SAFE_TIME: float = 6.0       # 自己刚产的蛋保护期(秒):产蛋后不会立刻自食
+const OWN_EGG_SAFE_RADIUS: float = 3.0     # 巢边保护半径(米):3m 内任何蛋都不咬,避免同巢互食
 
 const AI_MEAT_HUNGER: int = 30
 const AI_MEAT_HEAL: int = 10
@@ -73,10 +75,16 @@ var is_dead: bool = false
 
 var hunger_timer: float = 0.0
 var thirst_timer: float = 0.0
+## 饮水回复的小数累加器：1/60 物理步长下 DRINK_RATE*delta≈0.67，int() 恒为 0，
+## 必须累积到满 1 点再加到 current_thirst（同 PlayerDino._drink_acc 写法）
+var _drink_acc: float = 0.0
 var starve_timer: float = 0.0
 var decision_timer: float = 0.0
 var attack_timer: float = 0.0
 var lay_cooldown_timer: float = 0.0        # 产蛋冷却倒计时
+# 最近产下的蛋与产蛋时刻(秒):_find_prey 据此排除自己的蛋,防止饥饿 56~64 时下一个决策就咬掉
+var _last_egg: DinoEgg = null
+var _last_egg_time: float = 0.0
 var wander_timer: float = 0.0
 var wander_dir: Vector3 = Vector3.ZERO
 var wander_min_pause: float = 1.0
@@ -349,7 +357,10 @@ func _wander(delta: float) -> void:
 
 
 func _hunt(delta: float) -> void:
-	if hunt_target == null or not is_instance_valid(hunt_target):
+	# 入口校验死亡：玩家死亡后有 3.5 秒尸体展示期，期间 target 仍有效但 is_dead，
+	# 若不拦截会持续空咬；直接放弃目标回漫游
+	if hunt_target == null or not is_instance_valid(hunt_target) or _target_is_dead(hunt_target):
+		hunt_target = null
 		state_controller.transition_to(StateController.State.WANDER)
 		return
 	var to: Vector3 = hunt_target.global_position - global_position
@@ -420,7 +431,12 @@ func _drink(delta: float) -> void:
 	if to.length() > _cached_water.radius - 1.0:
 		_apply_movement(Vector3(to.x, 0.0, to.y).normalized(), walk_speed, delta)
 	else:
-		current_thirst = mini(current_thirst + int(DRINK_RATE * delta), THIRST_MAX)
+		# 小数部分留在累加器：int(40*1/60)=0，直接取整会让 AI 饮水永不回复口渴
+		_drink_acc += DRINK_RATE * delta
+		if _drink_acc >= 1.0:
+			var gain: int = int(_drink_acc)
+			_drink_acc -= float(gain)
+			current_thirst = mini(current_thirst + gain, THIRST_MAX)
 		_apply_movement(Vector3.ZERO, 0.0, delta)
 
 
@@ -483,6 +499,9 @@ func _try_lay_egg() -> void:
 	egg.owner_player = false
 	# 放脚下：蛋尚未入树，直接设局部位置（dynamic 容器为原点恒等变换，局部即世界坐标）
 	egg.position = global_position
+	# 记录自己的蛋：_find_prey 在 6 秒保护期/3m 巢边范围内会排除它，避免自产自食
+	_last_egg = egg
+	_last_egg_time = float(Time.get_ticks_msec()) * 0.001
 	egg_laid.emit(egg)
 
 
@@ -622,12 +641,23 @@ func _find_prey() -> Node3D:
 				best_d = d
 				best = c as Node3D
 	# 掠食者偷蛋:饿着肚子的肉食龙也盯上蛋(孵化前下口,含玩家巢边的蛋——护巢有理)
+	# 但排除自己刚产的蛋与巢边的蛋:蛋就落在脚下 0.5m,不排除会导致饥饿 56~64 时
+	# 下一个决策立刻咬掉自己的蛋;3m 内一律不咬同时避免同巢个体互食
+	var now: float = float(Time.get_ticks_msec()) * 0.001
 	for e in get_tree().get_nodes_in_group(Groups.EGG):
-		if is_instance_valid(e):
-			var d: float = global_position.distance_to((e as Node3D).global_position)
-			if d < best_d:
-				best_d = d
-				best = e as Node3D
+		if not is_instance_valid(e):
+			continue
+		var egg: DinoEgg = e as DinoEgg
+		if egg == null:
+			continue
+		if _last_egg != null and is_instance_valid(_last_egg) and egg == _last_egg and now - _last_egg_time < OWN_EGG_SAFE_TIME:
+			continue
+		var d: float = global_position.distance_to(egg.global_position)
+		if d <= OWN_EGG_SAFE_RADIUS:
+			continue
+		if d < best_d:
+			best_d = d
+			best = egg
 	var p: PlayerDino = _player()
 	if p != null and not p.is_dead:
 		var edible: bool = (not p.is_carnivore()) or (p.get_size() < current_size * 0.9)
