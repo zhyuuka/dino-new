@@ -7,6 +7,10 @@
 ```
 docs/
 ├── README.md            # 本文件：规范与索引
+├── SESSION_PROTOCOL.md  # 会话启动/结束协议（事实分级、声明-验证分离）
+├── STATE.md             # 当前状态锚：版本/commit/已验证数字/风险/下一步
+├── DECISIONS.md         # 架构决策记录（ADR，编号不复用）
+├── LESSONS.md           # 踩坑与根因库（同一错误不犯第二次）
 ├── ARCHITECTURE.md      # 架构现状评估 + 技术债 + 重构路线图
 ├── QA.md                # 质量评估：测试覆盖、冒烟结果、已知缺陷
 ├── PROGRESS.md          # 进度日志：每轮做了什么、验证结果、下一步

@@ -35,55 +35,87 @@
 
 ---
 
-## 二、冒烟基线模板
+## 二、冒烟基线（一键验证）
 
-### 2.1 环境准备（每次新终端执行一次）
+> 标准入口只有两个文件：`tests/smoke.gd`（标准冒烟，长期维护）与 `scripts/verify.sh`（一键编排）。
+> **任何提交前必须 PASS**：终端出现 `VERIFY_RESULT: PASS`，且带时间戳的记录已落到 `docs/reports/verify-*.md`。
+> 禁止再使用"用完即删"的临时冒烟脚本，否则各轮验证口径不一致、结果无法纵向比较。
+
+### 2.1 日常命令
 
 ```bash
-export XDG_DATA_HOME=/workspace/tools/godotdata
-export XDG_CONFIG_HOME=/workspace/tools/godotconfig
-export JAVA_HOME=/workspace/tools/jdk17
-GODOT=/workspace/tools/Godot_v4.4.1-stable_linux.x86_64
-PROJ=/workspace/dino-new
+cd /workspace/dino-new
+bash scripts/verify.sh          # 导入 + 单测 + 冒烟
+bash scripts/verify.sh --apk    # 追加导出 build/DinoWorld-verify.apk（不签名发布）
 ```
 
-### 2.2 冒烟用例表
+脚本内已固化环境，无需手工 export：
+
+```bash
+ROOT=/workspace/dino-new
+GODOT=/workspace/tools/Godot_v4.4.1-stable_linux.x86_64
+export XDG_DATA_HOME=/workspace/tools/godotdata
+export XDG_CONFIG_HOME=/workspace/tools/godotconfig
+```
+
+- Godot 存在且可执行：缺失直接退出（退出码 2）。
+- Android SDK（`/workspace/tools/android-sdk`）：缺失只警告，单测/冒烟不需要。
+- JDK（`/workspace/tools/jdk17`）：仅 `--apk` 时必需。
+
+### 2.2 自动步骤（已由 `scripts/verify.sh` 固化）
+
+| 编号 | 步骤 | 脚本内实际命令 | 判定标准 |
+|---|---|---|---|
+| SMK-01 | 导入 | `timeout 600 $GODOT --headless --path $ROOT --import` | 日志 `/tmp/verify-import.log` 中 `SCRIPT ERROR\|Parse Error` 行数为 **0** |
+| SMK-02 | 单测 | `timeout 300 $GODOT --headless --path $ROOT -s res://tests/run_tests.gd` | 退出码 0 且 `PASSED: n / FAILED: 0` |
+| SMK-03 | 冒烟 | `timeout 180 $GODOT --headless --path $ROOT -s res://tests/smoke.gd` | 退出码 0、`SMOKE_JSON.ok=true`，且 `/tmp/verify-smoke.log` 中 `SCRIPT ERROR` 行数为 **0** |
+| SMK-09 | 打包 | `timeout 600 $GODOT --headless --path $ROOT --export-release "Android Debug" "$ROOT/build/DinoWorld-verify.apk"` | 仅 `--apk` 时执行；退出码 0 且产物存在，体积记入记录 |
+
+所有 Godot 调用都带 `--headless` 与 `timeout`，日志先落 `/tmp/verify-<step>.log` 再解析，不污染终端。
+
+### 2.3 `tests/smoke.gd` 契约
+
+```bash
+SMOKE_SECONDS=40 SMOKE_MAP=forest SMOKE_SPECIES=raptor \
+  $GODOT --headless --path $ROOT -s res://tests/smoke.gd
+```
+
+- 环境变量：`SMOKE_SECONDS`（默认 40）、`SMOKE_MAP`（默认 forest）、`SMOKE_SPECIES`（默认 raptor）。
+- 流程：打印 `SMOKE_START map=... species=... seconds=...` → 加载 `Main.tscn` → 0.5s 后调用 `_on_map_selected` + `_on_species_selected(species, false)` → 观察指定秒数 → 输出单行 `SMOKE_JSON:`。
+- 输出字段：`ok, seconds, player, ai, plants, eggs, corpses, nodes, hunger, thirst, hp, pos_y, mmi, script_errors`。
+  - `mmi` = Main 子树内 `MultiMeshInstance3D` 数量（自然物/植物合批是否正常）。
+  - `script_errors` 固定为 `-1`：脚本读不到引擎 stderr，真实值由 `scripts/verify.sh` 从进程输出统计。
+- `ok` 判定：`player == 1` 且 `pos_y ∈ (-50, 200)`（未掉穿地形）且 `nodes > 100`。
+- 失败 `quit(1)`，成功 `quit(0)`。
+
+### 2.4 记录归档与结论
+
+- 每次运行生成 `docs/reports/verify-$(date +%Y%m%d-%H%M%S).md`，含：时间戳、git commit/分支、版本、各步骤耗时、导入错误数、单测数字、格式化冒烟 JSON、结论、失败时最多 30 行关键日志。
+- 判定：导入错误 = 0 **且** 单测 FAILED = 0 **且** 冒烟 `ok=true` **且** 冒烟 `SCRIPT ERROR` = 0 → PASS，否则 FAIL。
+- 终端最后一行固定为 `VERIFY_RESULT: PASS|FAIL | report: <路径>`；FAIL 退出码 1。
+- 记录可纵向比较：同口径、带时间戳、带 commit，禁止手工改写结论。
+
+### 2.5 手工用例（自动冒烟覆盖不到，发版前人工执行）
 
 | 编号 | 类型 | 步骤 | 预期输出 | 判定标准 |
 |---|---|---|---|---|
-| SMK-01 | 导入 | `$GODOT --headless --path "$PROJ" --import 2>&1 \| tee /tmp/import.log` | 正常结束 | 用 2.2.1 的关键词过滤命令检查 `/tmp/import.log`，命中数为 **0** |
-| SMK-02 | 单测 | `$GODOT --headless --path "$PROJ" -s res://tests/run_tests.gd` | 末行 `PASSED: 166 / FAILED: 0` | 退出码 0 且 `FAILED: 0` |
-| SMK-03 | 运行时 | `$GODOT --headless --path "$PROJ" --quit-after 16 2>&1 \| tee /tmp/smoke.log` | 跑满 16s 后自动退出 | 用 2.2.1 的关键词过滤命令检查 `/tmp/smoke.log`，命中数为 0；`is_inside_tree` 为已知良性告警，可忽略 |
 | SMK-04 | 开局流程 | 编辑器/真机：启动 → 选图 → 选种 → 加载 → 进入世界 | 加载条推进到 100% 并淡出；玩家可移动；无界面残留 | 加载界面 `queue_free`；选图/选种不再可见；HUD 数值正常 |
 | SMK-05 | 死亡重开 | 控制台执行 `player.take_damage(99999)`，等待 3.5s | 死亡屏 → 自动重开；第 N+1 代；世界地形/植被保留 | 无整场景卡顿；HUD/触屏只有一份；存档 `generation` 已 +1 |
 | SMK-06 | 暂停/设置 | 暂停 → 调音量/灵敏度 → 继续；重启后复查 | 暂停时世界停止；设置即时生效并跨重启保留 | `get_tree().paused` 正确切换；无输入残留；设置文件值合法 |
 | SMK-07 | 输入冲突 | 长按咬键 0.2s 叼尸；按 E 喝水；右半屏拖动视角 | 叼尸/放下正常；E 只触发喝水；转视角不自动咬 | 无“拖视角误咬/误叼”；轻点咬键只咬不叼 |
 | SMK-08 | 繁殖链路 | AI 巢边产蛋 → 45s 孵化；玩家产蛋 → 死亡 → 从蛋重生 | AI 幼体落地；玩家从蛋位置重生且旧蛋清理 | 蛋总数不持续增长；AI 不咬自己刚产的蛋 |
-| SMK-09 | 打包 | 见 2.3 发布命令，执行导出与校验 | APK 生成，`Signed` | `apksigner verify` v1/v2/v3 全过；`aapt2` 版本号/架构正确 |
 
-### 2.2.1 日志关键词过滤命令
-
-```bash
-# 导入日志：仅三类硬错误
-grep -nE 'SCRIPT ERROR|Parse Error|Compile Error' /tmp/import.log
-
-# 运行时日志：脚本/资源/类型错误；is_inside_tree 已知良性，不列入
-grep -nE 'SCRIPT ERROR|Invalid get|Null instance|Can.t find type|Animation not found|TypedArray' /tmp/smoke.log
-```
-
-**判定**：命令无输出（退出码 1）即通过；有输出则逐条定位，不得用 `continue-on-error` 掩盖。
-
-### 2.3 导出与校验命令
+### 2.6 导出与校验命令
 
 ```bash
-$GODOT --headless --path "$PROJ" --export-release "Android Debug" \
-  "$PROJ/build/DinoWorld-v0.2.6.apk"
+$GODOT --headless --path "$ROOT" --export-release "Android Debug" \
+  "$ROOT/build/DinoWorld-v0.2.6.apk"
 
 /workspace/tools/android-sdk/build-tools/34.0.0/aapt2 dump badging \
-  "$PROJ/build/DinoWorld-v0.2.6.apk" | grep -E "package:|native-code"
+  "$ROOT/build/DinoWorld-v0.2.6.apk" | grep -E "package:|native-code"
 /workspace/tools/android-sdk/build-tools/34.0.0/apksigner verify --verbose \
-  "$PROJ/build/DinoWorld-v0.2.6.apk"
-ls -l "$PROJ/build/DinoWorld-v0.2.6.apk"
+  "$ROOT/build/DinoWorld-v0.2.6.apk"
+ls -l "$ROOT/build/DinoWorld-v0.2.6.apk"
 ```
 
 ---
