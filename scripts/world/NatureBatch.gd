@@ -136,6 +136,24 @@ static func _bake_group(parent: Node3D, center: Vector3, chunk: Vector2i, slug: 
 		parent.add_child(mmi)
 
 
+## 清空模板缓存：释放全部模板网格与不入树的宿主节点，并清空字典（换图 / 回主菜单时调用）。
+## 模板网格与宿主均未加入场景树，queue_free() 对未入树节点不会生效，必须用 free()。
+## 先释放网格（此时仍存活且可安全摘离宿主），再释放宿主，避免访问已释放对象。
+static func clear_cache() -> void:
+	for template_value in _templates.values():
+		var meshes: Array = template_value as Array
+		for mesh_value in meshes:
+			var mi := mesh_value as MeshInstance3D
+			if mi != null and is_instance_valid(mi):
+				mi.free()
+	_templates.clear()
+	for holder_value in _holders.values():
+		var holder := holder_value as Node
+		if holder != null and is_instance_valid(holder):
+			holder.free()
+	_holders.clear()
+
+
 ## 取模板（首次调用时 load + instantiate 并缓存，之后零加载开销）
 static func _get_template(slug: String) -> Array:
 	if _templates.has(slug):

@@ -77,6 +77,12 @@ func _ready() -> void:
 	sun_light = $DirectionalLight3D
 	world_env = $WorldEnvironment
 
+	# 调试性能浮层：仅 debug build 挂载（release 连场景资源都不加载，彻底零开销）
+	if OS.is_debug_build():
+		var overlay_scene: PackedScene = load("res://scenes/DebugOverlay.tscn") as PackedScene
+		if overlay_scene != null:
+			add_child(overlay_scene.instantiate())
+
 	# 子系统装配（选图期间地形未生成，director 先以 null 地形注入，开局后再更新）
 	# 三个 Node 型子系统必须 add_child 挂进场景树：否则 reload_current_scene 释放 Main 时
 	# 它们成为孤儿节点无法回收（Node 非引用计数，不挂树必须手动 free）。均无自带回调，挂树零副作用。
@@ -596,7 +602,14 @@ func _on_ai_died(ai: AIDino, by_player: bool) -> void:
 
 func _on_menu() -> void:
 	skip_select = false
+	# 回主菜单前释放自然物模板缓存（MeshInstance3D + 不入树的宿主），避免模型实例跨场景常驻
+	NatureBatch.clear_cache()
 	get_tree().reload_current_scene()
+
+
+## 场景树退出兜底：reload / 退出游戏时同样清空自然物缓存，防止静态变量持有节点导致泄漏
+func _exit_tree() -> void:
+	NatureBatch.clear_cache()
 
 
 # ================= 主循环 =================

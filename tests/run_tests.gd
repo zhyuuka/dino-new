@@ -13,6 +13,7 @@ var _failed: int = 0
 
 func _initialize() -> void:
 	_test_groups()
+	_test_physics_layers()
 	_test_maps()
 	_test_dino_species()
 	_test_save_manager()
@@ -40,6 +41,28 @@ func _test_groups() -> void:
 	check(Groups.RESOURCE == "resource", "Groups.RESOURCE 应为 resource")
 	check(Groups.EGG == "egg", "Groups.EGG 应为 egg")
 	check(Groups.HUD == "hud", "Groups.HUD 应为 hud")
+
+
+# --- PhysicsLayers：物理层常量化 ---------------------------------------------
+
+func _test_physics_layers() -> void:
+	var layers: Array[int] = [
+		PhysicsLayers.WORLD, PhysicsLayers.PLAYER_BODY, PhysicsLayers.AI_BODY,
+		PhysicsLayers.PROP_BODY, PhysicsLayers.INTERACT, PhysicsLayers.TRIGGER,
+	]
+	var no_overlap: bool = true
+	for i in layers.size():
+		for j in range(i + 1, layers.size()):
+			if (layers[i] & layers[j]) != 0:
+				no_overlap = false
+	check(no_overlap, "PhysicsLayers 各层位应两两不重叠")
+	check(
+			(PhysicsLayers.PLAYER_MASK & PhysicsLayers.WORLD) != 0
+			and (PhysicsLayers.PLAYER_MASK & PhysicsLayers.AI_BODY) != 0
+			and (PhysicsLayers.PLAYER_MASK & PhysicsLayers.PROP_BODY) != 0,
+			"PLAYER_MASK 应包含 WORLD/AI_BODY/PROP_BODY")
+	check(PhysicsLayers.FOLIAGE_AREA_MASK == 6,
+			"FOLIAGE_AREA_MASK 应为 6（PLAYER_BODY|AI_BODY）")
 
 
 # --- Maps：地图预设库 --------------------------------------------------------

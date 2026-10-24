@@ -11,6 +11,7 @@ size = Vector3(1.2, 1.4, 2.4)
 size = Vector3(1.6, 1.6, 2.8)
 
 [node name="AIDino" type="CharacterBody3D"]
+; 映射：AI_BODY=4，AI_MASK=3（WORLD 1 | PLAYER_BODY 2），见 PhysicsLayers.gd
 collision_layer = 4
 collision_mask = 3
 script = ExtResource("1_ai")

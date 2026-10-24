@@ -13,8 +13,9 @@ radius = 2.4
 size = Vector3(1.6, 1.6, 2.8)
 
 [node name="PlayerDino" type="CharacterBody3D"]
+; 映射：PLAYER_BODY=2，PLAYER_MASK=13（WORLD 1 | AI_BODY 4 | PROP_BODY 8），见 PhysicsLayers.gd
 collision_layer = 2
-collision_mask = 5
+collision_mask = 13
 script = ExtResource("1_player")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
@@ -33,6 +34,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, -1.6)
 shape = SubResource("shape_bite")
 
 [node name="SpringArm3D" type="SpringArm3D" parent="."]
+; 相机避让仅 WORLD=1（保持原行为；CAMERA_MASK 供后续扩展）
 spring_length = 5.5
 collision_mask = 1
 

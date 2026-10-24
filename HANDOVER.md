@@ -611,4 +611,86 @@ Step 6（最终导出）      → APK 构建 → 签名校验 → 提交 + push
 - APK 体积仍约 699MB：未引用的高模仍以 `all_resources` 打进包内（运行时已不加载），后续可删除未引用资产或配置导出过滤瘦身。
 - 需真机复测：加载界面进度节奏、分帧后各图开局帧率、45 棵树的森林观感是否仍够"茂密"。
 
+---
+
+## 十四、打包工具链持久化（2026-10-18）
+
+> 背景：沙箱的 `/root` 与 `/opt` 已被重置两次，此前放在 `/opt/android-sdk`、`/root/.local/share/godot` 的 SDK / 导出模板 / 编辑器配置全部丢失，每次都要重装。本次把**全部工具链与 Godot 数据/配置**迁到 `/workspace/tools` 持久目录，并用 XDG 环境变量接管 Godot 的路径解析。
+
+### 14.1 路径清单（全部位于 /workspace/tools，持久）
+
+| 组件 | 路径 | 说明 |
+|------|------|------|
+| Godot 引擎 | `/workspace/tools/Godot_v4.4.1-stable_linux.x86_64` | 4.4.1.stable.official.49a5bc7b6 |
+| JDK 17 | `/workspace/tools/jdk17` | Temurin 17.0.20.1+1（由 mise 目录复制，不再依赖 `/root`） |
+| Android SDK | `/workspace/tools/android-sdk` | cmdline-tools 11076708 + platform-tools 37.0.1 + platforms;android-34 + build-tools;34.0.0 |
+| 导出模板 | `/workspace/tools/godotdata/godot/export_templates/4.4.1.stable/` | 含 `android_debug.apk` / `android_release.apk` |
+| 编辑器配置 | `/workspace/tools/godotconfig/godot/editor_settings-4.4.tres` | 见 14.2 |
+| debug keystore | `/workspace/tools/debug.keystore` | RSA2048 / 9999 天 / 别名 `androiddebugkey` / 口令 `android` |
+| 安装包 | `/workspace/DinoWorld-v0.2.6.apk`（仓库内 `build/DinoWorld-v0.2.6.apk`） | 98,305,858 字节（93.75 MiB） |
+
+### 14.2 editor_settings 关键项
+
+`/workspace/tools/godotconfig/godot/editor_settings-4.4.tres`：
+
+```ini
+export/android/java_sdk_path = "/workspace/tools/jdk17"
+export/android/android_sdk_path = "/workspace/tools/android-sdk"
+export/android/debug_keystore = "/workspace/tools/debug.keystore"
+export/android/debug_keystore_user = "androiddebugkey"
+export/android/debug_keystore_pass = "android"
+```
+
+同时 `export_presets.cfg` 的模板与 keystore 路径也已改为持久路径：`custom_template/debug`、`custom_template/release` 指向 `/workspace/tools/godotdata/godot/export_templates/4.4.1.stable/`，`keystore/debug` 指向 `/workspace/tools/debug.keystore`。
+
+### 14.3 每次构建必须带的环境变量
+
+```bash
+export XDG_DATA_HOME=/workspace/tools/godotdata
+export XDG_CONFIG_HOME=/workspace/tools/godotconfig
+export JAVA_HOME=/workspace/tools/jdk17
+# 仅 release 签名时（当前用 debug 证书签名 release 包）：
+export GODOT_ANDROID_KEYSTORE_RELEASE_PATH=/workspace/tools/debug.keystore
+export GODOT_ANDROID_KEYSTORE_RELEASE_USER=androiddebugkey
+export GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD=android
+```
+
+**所有 godot 命令**（导入、编辑器、导出）都必须带 `XDG_DATA_HOME` / `XDG_CONFIG_HOME`，否则会回退到 `/root/.local/share`、`/root/.config`。
+
+### 14.4 构建命令
+
+```bash
+# 1) 导入（要求 SCRIPT ERROR 为 0）
+/workspace/tools/Godot_v4.4.1-stable_linux.x86_64 --headless --path /workspace/dino-new --import
+
+# 2) 导出
+/workspace/tools/Godot_v4.4.1-stable_linux.x86_64 --headless --path /workspace/dino-new \
+  --export-release "Android Debug" /workspace/dino-new/build/DinoWorld-v0.2.6.apk
+
+# 3) 校验
+/workspace/tools/android-sdk/build-tools/34.0.0/aapt2 dump badging build/DinoWorld-v0.2.6.apk | grep -E "package:|native-code"
+/workspace/tools/android-sdk/build-tools/34.0.0/apksigner verify --verbose build/DinoWorld-v0.2.6.apk
+```
+
+### 14.5 重置后的重建步骤
+
+1. 确认 `/workspace/tools` 下各组件仍在（该目录持久，正常重置不受影响）。
+2. 若 `editor_settings-4.4.tres` 丢失：先跑一次
+   `XDG_DATA_HOME=... XDG_CONFIG_HOME=... godot --headless --editor --quit --path /workspace/dino-new`
+   生成默认文件，再按 14.2 写入 5 个键值即可。**这是重置后唯一需要手工重建的配置**。
+3. 若 JDK 丢失：从 Adoptium 下载 Temurin 17 解压到 `/workspace/tools/jdk17`。
+4. 若 SDK 丢失：解压 cmdline-tools 到 `/workspace/tools/android-sdk/cmdline-tools/latest`，执行
+   `yes | sdkmanager --sdk_root=/workspace/tools/android-sdk --licenses`，再装 `platform-tools`、`platforms;android-34`、`build-tools;34.0.0`。
+5. 若模板丢失：下载 `Godot_v4.4.1-stable_export_templates.tpz`，解压后把 `templates/` 改名为
+   `/workspace/tools/godotdata/godot/export_templates/4.4.1.stable/`。
+6. 若 keystore 丢失：`keytool -genkeypair -v -keystore /workspace/tools/debug.keystore -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 9999 -storepass android -keypass android -dname "CN=Android Debug,O=Android,C=US"`。
+
+### 14.6 本次验证结果
+
+- 模板解压 17s（复用已有 `export-templates.tpz`，未重新下载）；SDK 安装 16s；导入 6s / 0 SCRIPT ERROR；导出 15s。
+- APK：`versionName=0.2.6`、`native-code: 'arm64-v8a'`、minSdk 21 / targetSdk 34，apksigner v1/v2/v3 全通过（RSA 2048，CN=Android Debug）。
+- 体积 98,305,858 字节（93.75 MiB），v0.2.5 为 93.74 MiB，基本持平。
+- Release：https://github.com/zhyuuka/dino-new/releases/tag/v0.2.6
+- 结论：下次 `/root`、`/opt` 重置后，**只需按 14.5 第 2 步重建 editor_settings**，其余组件与模板均在持久目录中，可直接重新导入与导出。
+
 
