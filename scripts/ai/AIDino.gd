@@ -65,20 +65,21 @@ var current_size: float = 1.0
 
 var current_health: int = 100
 var max_health: int = 100
-var current_hunger: int = HUNGER_MAX
-var current_thirst: int = THIRST_MAX
+
+# 生存数值纯逻辑层：饥饿 / 口渴（AI 无体力）；public 成员名保持不变
+var _vitals: Vitals = Vitals.new()
+var current_hunger: int:
+	get:
+		return _vitals.hunger
+var current_thirst: int:
+	get:
+		return _vitals.thirst
 var bite_damage: int = 10
 var walk_speed: float = 5.0
 var run_speed: float = 9.0
 var attack_cooldown: float = 0.6
 var is_dead: bool = false
 
-var hunger_timer: float = 0.0
-var thirst_timer: float = 0.0
-## 饮水回复的小数累加器：1/60 物理步长下 DRINK_RATE*delta≈0.67，int() 恒为 0，
-## 必须累积到满 1 点再加到 current_thirst（同 PlayerDino._drink_acc 写法）
-var _drink_acc: float = 0.0
-var starve_timer: float = 0.0
 var decision_timer: float = 0.0
 var attack_timer: float = 0.0
 var lay_cooldown_timer: float = 0.0        # 产蛋冷却倒计时
@@ -120,20 +121,41 @@ func _ready() -> void:
 	dino_visual.setup(species_id, species.body_color, species.dark_color)
 	_apply_stats()
 	current_health = max_health
-	current_hunger = HUNGER_MAX
-	current_thirst = THIRST_MAX
+	_vitals.setup(HUNGER_MAX, THIRST_MAX, 0, _vitals_rates())
 	state_controller.transition_to(StateController.State.WANDER)
 
 
 func _apply_stats() -> void:
-	var info: Dictionary = DinoSpecies.stage_info(growth_stage)
-	max_health = int(round(species.max_health * info["hp"]))
-	bite_damage = int(round(species.bite_damage * info["dmg"]))
-	walk_speed = species.walk_speed * info["spd"] * 0.8
-	run_speed = species.run_speed * info["spd"] * 0.8
+	max_health = int(round(species.max_health * GrowthRules.stage_multiplier(growth_stage, "hp")))
+	bite_damage = int(round(species.bite_damage * GrowthRules.stage_multiplier(growth_stage, "dmg")))
+	walk_speed = species.walk_speed * GrowthRules.stage_multiplier(growth_stage, "spd") * 0.8
+	run_speed = species.run_speed * GrowthRules.stage_multiplier(growth_stage, "spd") * 0.8
 	attack_cooldown = species.bite_cooldown
-	current_size = species.size * info["size"]
+	current_size = species.size * GrowthRules.stage_multiplier(growth_stage, "size")
 	dino_visual.set_size(current_size)
+
+
+## 注入 Vitals 速率：AI 无体力，故体力相关速率置 0，且口渴归零不结算掉血（与原实现一致）
+func _vitals_rates() -> Dictionary:
+	return {
+		"hunger_interval": HUNGER_INTERVAL,
+		"thirst_interval": THIRST_INTERVAL,
+		"thirst_sprint_mult": 1.0,
+		"stamina_drain": 0.0,
+		"stamina_regen": 0.0,
+		"stamina_lock": 0.0,
+		"drag_stamina_mult": 1.0,
+		"drink_rate": DRINK_RATE,
+		"starve_interval": STARVE_INTERVAL,
+		"starve_damage": STARVE_DAMAGE,
+		"thirst_starve_interval": 0.0,
+		"thirst_starve_damage": 0,
+		"eat_meat_hunger": AI_MEAT_HUNGER,
+		"eat_plant_hunger": AI_PLANT_HUNGER,
+		"eat_plant_thirst": 0,
+		"eat_egg_hunger": EGG_BITE_HUNGER,
+		"survival_step_once": true,
+	}
 
 
 func _physics_process(delta: float) -> void:
@@ -240,9 +262,9 @@ func _decide() -> void:
 
 func _prey_weak(prey: Node3D) -> bool:
 	if prey is PlayerDino:
-		return (prey as PlayerDino).get_size() < current_size * 0.7
+		return CombatRules.is_weak_prey((prey as PlayerDino).get_size(), current_size)
 	if prey is AIDino:
-		return (prey as AIDino).current_size < current_size * 0.7
+		return CombatRules.is_weak_prey((prey as AIDino).current_size, current_size)
 	return false
 
 
@@ -304,14 +326,14 @@ func _target_is_dead(target: Node3D) -> bool:
 	return false
 
 
-## 仇恨体型规则(阈值风格参考 _find_prey 的 ×0.9):攻击者体型 ≤ 自己×0.9 视为打得过,可反击
+## 仇恨体型规则(CombatRules 的 ×0.9):攻击者体型 ≤ 自己×0.9 视为打得过,可反击
 func _can_beat_attacker(attacker: Node3D) -> bool:
 	var a_size: float = 0.0
 	if attacker is PlayerDino:
 		a_size = (attacker as PlayerDino).get_size()
 	elif attacker is AIDino:
 		a_size = (attacker as AIDino).current_size
-	return a_size <= current_size * 0.9
+	return CombatRules.can_counter(a_size, current_size)
 
 
 # ================= 行为 =================
@@ -382,7 +404,7 @@ func _hunt(delta: float) -> void:
 			(hunt_target as AIDino).take_damage(_effective_bite(), false, self)
 		elif hunt_target is AICorpse:
 			if (hunt_target as AICorpse).try_eat():
-				_eat(AI_MEAT_HUNGER, AI_MEAT_HEAL)
+				_eat("meat", AI_MEAT_HEAL)
 			else:
 				# 尸体已空/淡出中:放弃猎物回漫游,不再原地空咬
 				hunt_target = null
@@ -391,7 +413,7 @@ func _hunt(delta: float) -> void:
 			# 掠食者偷蛋:血量 2 口,每口小收益,蛋破即消失(AI 蛋不再孵化,玩家蛋被偷则失去重生锚点)
 			var egg: DinoEgg = hunt_target as DinoEgg
 			egg.take_damage(1, self)
-			_eat(EGG_BITE_HUNGER, EGG_BITE_HEAL)
+			_eat("egg", EGG_BITE_HEAL)
 			if egg.hp <= 0:
 				hunt_target = null
 				state_controller.transition_to(StateController.State.WANDER)
@@ -431,12 +453,8 @@ func _drink(delta: float) -> void:
 	if to.length() > _cached_water.radius - 1.0:
 		_apply_movement(Vector3(to.x, 0.0, to.y).normalized(), walk_speed, delta)
 	else:
-		# 小数部分留在累加器：int(40*1/60)=0，直接取整会让 AI 饮水永不回复口渴
-		_drink_acc += DRINK_RATE * delta
-		if _drink_acc >= 1.0:
-			var gain: int = int(_drink_acc)
-			_drink_acc -= float(gain)
-			current_thirst = mini(current_thirst + gain, THIRST_MAX)
+		# 小数部分由 Vitals 累加，满 1 点才回复口渴
+		_vitals.drink(delta)
 		_apply_movement(Vector3.ZERO, 0.0, delta)
 
 
@@ -453,31 +471,23 @@ func _flee(delta: float) -> void:
 
 # ================= 生存数值 =================
 func _update_vitals(delta: float) -> void:
-	hunger_timer += delta
-	if hunger_timer >= HUNGER_INTERVAL:
-		hunger_timer -= HUNGER_INTERVAL
-		current_hunger = maxi(0, current_hunger - 1)
-	if current_hunger <= 0:
-		starve_timer += delta
-		if starve_timer >= STARVE_INTERVAL:
-			starve_timer -= STARVE_INTERVAL
-			take_damage(STARVE_DAMAGE, false)
-	thirst_timer += delta
-	if thirst_timer >= THIRST_INTERVAL:
-		thirst_timer -= THIRST_INTERVAL
-		current_thirst = maxi(0, current_thirst - 1)
+	# AI 不冲刺、无体力，只结算饥饿 / 口渴与饿死伤害
+	_vitals.tick_survival(delta, false)
+	var starve_damage: int = _vitals.pull_starve_damage()
+	if starve_damage > 0:
+		take_damage(starve_damage, false)
 
 
-func _eat(hunger_amt: int, heal_amt: int) -> void:
+func _eat(kind: String, heal_amt: int) -> void:
 	if is_dead:
 		return
-	current_hunger = mini(current_hunger + hunger_amt, HUNGER_MAX)
+	_vitals.eat(kind)
 	current_health = mini(current_health + heal_amt, max_health)
 
 
 # 草食 AI 被植物碰到时调用（由 Foliage 触发）
 func on_eat_plant() -> void:
-	_eat(AI_PLANT_HUNGER, AI_PLANT_HEAL)
+	_eat("plant", AI_PLANT_HEAL)
 
 
 # ================= 繁殖（产蛋） =================
@@ -528,7 +538,7 @@ func take_damage(amount: int, by_player: bool, attacker: Node = null) -> void:
 		_aggro_timer = AGGRO_DURATION
 	var dmg: int = amount
 	if species.passive == DinoSpecies.PassiveAbility.DEFENSE:
-		dmg = int(round(amount * 0.55))
+		dmg = CombatRules.apply_defense(amount)
 	current_health = maxi(0, current_health - dmg)
 	dino_visual.pulse_damage()
 	if current_health <= 0:
@@ -545,10 +555,11 @@ func _die() -> void:
 
 
 func _effective_bite() -> int:
-	var dmg: int = bite_damage
+	# 基础伤害已含成长倍率，故 growth_mult 传 1.0；集群同伴在 14m 内 +20%
+	var pack_bonus: float = 0.0
 	if species.passive == DinoSpecies.PassiveAbility.PACK and _has_ally_near():
-		dmg = int(round(dmg * 1.2))
-	return dmg
+		pack_bonus = CombatRules.PACK_DMG_BONUS
+	return CombatRules.bite_damage(bite_damage, 1.0, false, pack_bonus)
 
 
 func _has_ally_near() -> bool:
@@ -580,14 +591,14 @@ func _find_threat() -> Node3D:
 		var other: AIDino = n as AIDino
 		if other.is_dead or other.species.diet != DinoSpecies.Diet.CARNIVORE:
 			continue
-		if other.current_size <= current_size * 0.85:
+		if not CombatRules.is_threat(other.current_size, current_size):
 			continue
 		var d: float = global_position.distance_to(other.global_position)
 		if d < best_d:
 			best_d = d
 			best = other
 	var p: PlayerDino = _player()
-	if p != null and not p.is_dead and p.is_carnivore() and p.get_size() > current_size * 0.85:
+	if p != null and not p.is_dead and p.is_carnivore() and CombatRules.is_threat(p.get_size(), current_size):
 		var d: float = global_position.distance_to(p.global_position)
 		if d < best_d:
 			best = p
@@ -624,11 +635,8 @@ func _find_prey() -> Node3D:
 		var other: AIDino = n as AIDino
 		if other.is_dead:
 			continue
-		var edible: bool = false
-		if other.species.diet == DinoSpecies.Diet.HERBIVORE:
-			edible = true
-		elif other.current_size < current_size * 0.9:
-			edible = true
+		var edible: bool = CombatRules.can_hunt(
+				current_size, other.current_size, species.diet, other.species.diet)
 		if edible:
 			var d: float = global_position.distance_to(other.global_position)
 			if d < best_d:
@@ -660,7 +668,8 @@ func _find_prey() -> Node3D:
 			best = egg
 	var p: PlayerDino = _player()
 	if p != null and not p.is_dead:
-		var edible: bool = (not p.is_carnivore()) or (p.get_size() < current_size * 0.9)
+		var player_diet: int = DinoSpecies.Diet.CARNIVORE if p.is_carnivore() else DinoSpecies.Diet.HERBIVORE
+		var edible: bool = CombatRules.can_hunt(current_size, p.get_size(), species.diet, player_diet)
 		if edible:
 			var d: float = global_position.distance_to(p.global_position)
 			if d < best_d:

@@ -55,12 +55,9 @@ const PLANT_HEAL: int = 4
 const CHARGE_DURATION: float = 0.5
 const CHARGE_COOLDOWN: float = 4.0
 const CHARGE_SPEED_MULT: float = 2.0
-const CHARGE_DMG_MULT: float = 2.2
 const CHARGE_REACH: float = 3.0
 const PACK_RADIUS: float = 14.0
 const PACK_SPEED_BONUS: float = 0.12
-const PACK_DMG_BONUS: float = 0.20
-const DEFENSE_REDUCTION: float = 0.55    # 重甲：受到伤害 ×0.55
 const DRINK_RATE: float = 45.0           # 每秒回渴速度
 const DRINK_SLOW: float = 0.4            # 喝水时移动减速
 
@@ -90,9 +87,18 @@ var growth_meals: int = 0                # 当前阶段已进食次数
 
 var current_health: int = 100
 var max_health: int = 100
-var current_hunger: int = HUNGER_MAX
-var current_thirst: int = THIRST_MAX
-var current_stamina: int = STAMINA_MAX
+
+# 生存数值纯逻辑层：public 成员名保持不变，外部（HUD / TutorialGuide）仍按属性读取
+var _vitals: Vitals = Vitals.new()
+var current_hunger: int:
+	get:
+		return _vitals.hunger
+var current_thirst: int:
+	get:
+		return _vitals.thirst
+var current_stamina: int:
+	get:
+		return _vitals.stamina
 
 # 矿物盐等临时增益
 var buff_timer: float = 0.0
@@ -124,13 +130,6 @@ var charge_timer: float = 0.0
 var charged_targets: Array = []
 var pack_bonus: bool = false
 
-# 生存数值 float 累加器：物理步长 1/60 时 int(速率 * delta) 恒为 0（45/60=0.75、22/60=0.37），
-# 改为 float 累积满 1.0 才结算整数增减，余数留在累加器里，长时间平均速率与原设计一致
-var _hunger_acc: float = 0.0
-var _thirst_acc: float = 0.0
-var _stamina_acc: float = 0.0
-var _drink_acc: float = 0.0
-
 # 上一帧已广播的整数值：只在整数真的变化时才 emit，避免 HUD 每物理帧重写 Label
 var _last_hunger: int = -1
 var _last_thirst: int = -1
@@ -144,9 +143,7 @@ var _bite_hold_consumed: bool = false  # 本次按住会话已叼过/已失效�
 var _drag_scan_timer: float = DRAG_SCAN_INTERVAL  # 叼取扫描节流计时（初值=首扫延迟：长按 0.2s 后才叼取，轻点咬击不误叼）
 var _terrain_ref: TerrainGenerator = null  # 地形引用缓存（Main 未注入本脚本，惰性按类型查找一次）
 
-# 衰减计时器
-var starve_timer: float = 0.0
-var thirst_starve_timer: float = 0.0
+# 提示 / 产蛋 / 巢穴扫描
 var current_hint: String = ""
 var lay_cooldown_timer: float = 0.0      # 产蛋冷却倒计时
 var _nest_scan_timer: float = 0.0        # 巢穴扫描节流
@@ -200,9 +197,7 @@ func _ready() -> void:
 	_apply_species_appearance()
 	_apply_growth_stats()
 	current_health = max_health
-	current_hunger = HUNGER_MAX
-	current_thirst = THIRST_MAX
-	current_stamina = STAMINA_MAX
+	_vitals.setup(HUNGER_MAX, THIRST_MAX, STAMINA_MAX, _vitals_rates())
 	# 摄像机不继承玩家旋转
 	spring_arm.top_level = true
 	spring_arm.spring_length = 5.5
@@ -225,22 +220,44 @@ func _apply_species_appearance() -> void:
 
 # ================= 属性（物种 × 成长） =================
 func _apply_growth_stats() -> void:
-	var info: Dictionary = DinoSpecies.stage_info(growth_stage)
-	max_health = int(round(species.max_health * info["hp"]))
-	bite_damage = int(round(species.bite_damage * info["dmg"]))
-	walk_speed = species.walk_speed * info["spd"]
-	run_speed = species.run_speed * info["spd"]
+	max_health = int(round(species.max_health * GrowthRules.stage_multiplier(growth_stage, "hp")))
+	bite_damage = int(round(species.bite_damage * GrowthRules.stage_multiplier(growth_stage, "dmg")))
+	walk_speed = species.walk_speed * GrowthRules.stage_multiplier(growth_stage, "spd")
+	run_speed = species.run_speed * GrowthRules.stage_multiplier(growth_stage, "spd")
 	bite_cooldown = species.bite_cooldown
-	current_size = species.size * info["size"]
+	current_size = species.size * GrowthRules.stage_multiplier(growth_stage, "size")
 	visual_base_scale = Vector3(current_size, current_size, current_size)
 	dino_visual.set_size(current_size)
 
 
 func _growth_signal() -> void:
 	var info: Dictionary = DinoSpecies.stage_info(growth_stage)
-	var need: int = info["need"]
-	var progress: float = float(growth_meals) / float(need) if need < 9000 else 1.0
+	var need: float = GrowthRules.next_stage_progress(growth_stage)
+	var progress: float = float(growth_meals) / need if need < 9000.0 else 1.0
 	growth_changed.emit(growth_stage, info["name"], progress)
+
+
+## 注入 Vitals 的全部速率：数值仍由本脚本常量定义，Domain 不硬编码平衡值
+func _vitals_rates() -> Dictionary:
+	return {
+		"hunger_interval": HUNGER_INTERVAL,
+		"thirst_interval": THIRST_INTERVAL,
+		"thirst_sprint_mult": THIRST_SPRINT_MULT,
+		"stamina_drain": STAMINA_DRAIN,
+		"stamina_regen": STAMINA_REGEN,
+		"stamina_lock": STAMINA_LOCK,
+		"drag_stamina_mult": DRAG_STAMINA_MULT,
+		"drink_rate": DRINK_RATE,
+		"starve_interval": STARVE_INTERVAL,
+		"starve_damage": STARVE_DAMAGE,
+		"thirst_starve_interval": THIRST_STARVE_INTERVAL,
+		"thirst_starve_damage": THIRST_STARVE_DAMAGE,
+		"eat_meat_hunger": MEAT_HUNGER,
+		"eat_plant_hunger": PLANT_HUNGER,
+		"eat_plant_thirst": PLANT_THIRST,
+		"eat_egg_hunger": 0,
+		"survival_step_once": false,
+	}
 
 
 # ================= 输入 =================
@@ -326,13 +343,9 @@ func _physics_process(delta: float) -> void:
 	var drinking: bool = false
 	if drink_held and _is_in_water():
 		drinking = true
-		# 45 点/秒按物理步长结算：小数部分累积到满 1 点才加到口渴上（int(45*delta) 恒为 0）
-		_drink_acc += DRINK_RATE * delta
-		if _drink_acc >= 1.0:
-			var gain: int = int(_drink_acc)
-			_drink_acc -= float(gain)
-			current_thirst = mini(current_thirst + gain, THIRST_MAX)
-			_emit_thirst()
+		# 45 点/秒按物理步长结算：小数部分由 Vitals 累积，满 1 点才加到口渴上
+		_vitals.drink(delta)
+		_emit_thirst()
 		speed *= DRINK_SLOW
 		_update_drink_hint(true)
 		if not _was_drinking:
@@ -385,64 +398,29 @@ func _physics_process(delta: float) -> void:
 
 # ================= 体力 =================
 func _update_stamina(delta: float, moving: bool) -> void:
+	# 本帧是否想冲刺：由输入 / 移动 / 当前体力共同决定（与旧实现同一帧内先判后扣）
 	var sprinting: bool = Input.is_action_pressed("sprint") and moving and can_sprint()
-	# 每秒变化率：负 = 消耗，正 = 回复。叼住尸体移动按 1.5 倍流失（走/跑同款倍率）；原地叼住按常规回复
-	var rate: float = STAMINA_REGEN
-	if _dragged_corpse != null and moving:
-		rate = -STAMINA_DRAIN * DRAG_STAMINA_MULT
-	elif sprinting:
-		rate = -STAMINA_DRAIN
-	# 小数部分留在累加器：22/60≈0.37 这种步长下 int(速率*delta) 恒为 0，会永不掉体力
-	_stamina_acc += rate * delta
-	if _stamina_acc >= 1.0:
-		var gain: int = int(_stamina_acc)
-		_stamina_acc -= float(gain)
-		current_stamina = mini(current_stamina + gain, STAMINA_MAX)
-	elif _stamina_acc <= -1.0:
-		var loss: int = int(_stamina_acc)   # int() 向零截断，不足 1 的余数继续留在累加器
-		_stamina_acc -= float(loss)
-		current_stamina = maxi(0, current_stamina + loss)
-	_post_stamina_check()
+	var dragging: bool = _dragged_corpse != null and moving
+	_vitals.tick_stamina(delta, sprinting, dragging)
 	_emit_stamina()
 
 func can_sprint() -> bool:
-	return current_stamina > 0 and not _exhausted
-
-var _exhausted: bool = false
-func _post_stamina_check() -> void:
-	if current_stamina <= 0:
-		_exhausted = true
-	elif current_stamina >= STAMINA_LOCK:
-		_exhausted = false
+	return _vitals.can_sprint()
 
 
 # ================= 生存数值衰减 =================
 func _update_vitals(delta: float, sprinting: bool) -> void:
-	# 饥饿：14s 掉 1 点。用 float 累加点数，满 1 才扣，余数保留（等价于原计时器，但不受物理步长取整影响）
-	_hunger_acc += delta / HUNGER_INTERVAL
-	if _hunger_acc >= 1.0:
-		var h: int = int(_hunger_acc)
-		_hunger_acc -= float(h)
-		current_hunger = maxi(0, current_hunger - h)
-		_emit_hunger()
-	if current_hunger <= 0:
-		starve_timer += delta
-		if starve_timer >= STARVE_INTERVAL:
-			starve_timer -= STARVE_INTERVAL
-			take_damage(STARVE_DAMAGE)
-	# 口渴（冲刺时消耗翻倍 → 每秒点数 = 1 / 间隔）
-	var ti: float = THIRST_INTERVAL * (THIRST_SPRINT_MULT if sprinting else 1.0)
-	_thirst_acc += delta / ti
-	if _thirst_acc >= 1.0:
-		var t: int = int(_thirst_acc)
-		_thirst_acc -= float(t)
-		current_thirst = maxi(0, current_thirst - t)
-		_emit_thirst()
-	if current_thirst <= 0:
-		thirst_starve_timer += delta
-		if thirst_starve_timer >= THIRST_STARVE_INTERVAL:
-			thirst_starve_timer -= THIRST_STARVE_INTERVAL
-			take_damage(THIRST_STARVE_DAMAGE)
+	# 22/60 ≈ 0.37 这类步长下整数结算会恒为 0，Vitals 内部用 float 累加余数
+	_vitals.tick_survival(delta, sprinting)
+	_emit_hunger()
+	_emit_thirst()
+	# 饿死 / 渴死伤害仍由 Node 走 take_damage，保留受伤表现与死亡流程
+	var starve_damage: int = _vitals.pull_starve_damage()
+	if starve_damage > 0:
+		take_damage(starve_damage)
+	var thirst_damage: int = _vitals.pull_thirst_damage()
+	if thirst_damage > 0:
+		take_damage(thirst_damage)
 
 
 # ================= 数值广播（仅在整数变化时发信号，避免 HUD 每帧重排） =================
@@ -546,11 +524,10 @@ func _bite_hit(node: Node3D, fwd: Vector3) -> bool:
 	return fwd.dot(to) > 0.2
 
 func _effective_bite() -> int:
-	var dmg: int = bite_damage
-	if pack_bonus:
-		dmg = int(round(dmg * (1.0 + PACK_DMG_BONUS)))
-	dmg = int(round(dmg * buff_dmg_mult))
-	return dmg
+	# 基础伤害已含成长倍率，故 growth_mult 传 1.0；取整顺序：集群 → 限时增益
+	var dmg: int = CombatRules.bite_damage(
+			bite_damage, 1.0, false, CombatRules.PACK_DMG_BONUS if pack_bonus else 0.0)
+	return CombatRules.apply_multiplier(dmg, buff_dmg_mult)
 
 
 ## 矿物盐等限时增益
@@ -646,7 +623,7 @@ func _ground_y(x: float, z: float) -> float:
 
 ## 巢穴回体力（夹取并广播）
 func restore_stamina(amt: int) -> void:
-	current_stamina = mini(current_stamina + amt, STAMINA_MAX)
+	_vitals.restore_stamina(amt)
 	_emit_stamina()
 
 
@@ -671,7 +648,8 @@ func _do_charge_damage() -> void:
 	var fwd: Vector3 = -global_transform.basis.z
 	fwd.y = 0.0
 	fwd = fwd.normalized()
-	var dmg: int = int(round(_effective_bite() * CHARGE_DMG_MULT))
+	# 冲锋伤害 = 当前有效咬击 × 2.2（由 CombatRules 统一取整）
+	var dmg: int = CombatRules.bite_damage(_effective_bite(), 1.0, true, 0.0)
 	for node in get_tree().get_nodes_in_group(Groups.AI):
 		if node in charged_targets:
 			continue
@@ -695,20 +673,19 @@ func _eat_meal(kind: String) -> void:
 		if species.diet != DinoSpecies.Diet.CARNIVORE:
 			return
 		_sfx(SFX_EAT)
-		current_hunger = mini(current_hunger + MEAT_HUNGER, HUNGER_MAX)
+		_vitals.eat("meat")
 		_emit_hunger()
 		heal(MEAT_HEAL)
-		_add_growth_meal()
+		_add_growth_meal(GrowthRules.MEAL_MEAT)
 	elif kind == "plant":
 		if species.diet != DinoSpecies.Diet.HERBIVORE:
 			return
 		_sfx(SFX_EAT)
-		current_hunger = mini(current_hunger + PLANT_HUNGER, HUNGER_MAX)
-		current_thirst = mini(current_thirst + PLANT_THIRST, THIRST_MAX)
+		_vitals.eat("plant")
 		_emit_hunger()
 		_emit_thirst()
 		heal(PLANT_HEAL)
-		_add_growth_meal()
+		_add_growth_meal(GrowthRules.MEAL_PLANT)
 
 ## 草食玩家被植物自动吃到时调用（由 Foliage 触发）
 func on_eat_plant() -> void:
@@ -716,10 +693,10 @@ func on_eat_plant() -> void:
 		return
 	_eat_meal("plant")
 
-func _add_growth_meal() -> void:
-	growth_meals += 1
-	var need: int = DinoSpecies.stage_info(growth_stage)["need"]
-	if growth_meals >= need and growth_stage < DinoSpecies.MAX_STAGE:
+func _add_growth_meal(meal_kind: int) -> void:
+	growth_meals = int(GrowthRules.add_progress(float(growth_meals), meal_kind))
+	var need: float = GrowthRules.next_stage_progress(growth_stage)
+	if float(growth_meals) >= need and growth_stage < DinoSpecies.MAX_STAGE:
 		growth_meals = 0
 		growth_stage += 1
 		_apply_growth_stats()
@@ -768,7 +745,7 @@ func _try_lay_egg() -> void:
 	if lay_cooldown_timer > 0.0 or current_hunger <= LAY_HUNGER_MIN:
 		return
 	lay_cooldown_timer = LAY_COOLDOWN
-	current_hunger = maxi(0, current_hunger - LAY_HUNGER_COST)
+	_vitals.consume_hunger(LAY_HUNGER_COST)
 	_emit_hunger()
 	var egg := EGG_SCENE.instantiate() as DinoEgg
 	egg.species_id = species.id
@@ -787,7 +764,7 @@ func take_damage(amount: int, attacker: Node = null) -> void:
 		return
 	var dmg: int = amount
 	if species.passive == DinoSpecies.PassiveAbility.DEFENSE:
-		dmg = int(round(amount * DEFENSE_REDUCTION))
+		dmg = CombatRules.apply_defense(amount)
 	current_health = maxi(0, current_health - dmg)
 	health_changed.emit(current_health, max_health)
 	dino_visual.pulse_damage()
@@ -817,11 +794,12 @@ func _die() -> void:
 	tween.tween_property(self, "global_position:y", global_position.y - 0.4, 0.5)
 
 func _save_progress() -> void:
-	var d := SaveManager.load_save()
-	d["species_id"] = species.id
-	d["growth_stage"] = growth_stage
-	d["generation"] = generation
-	SaveManager.write_save(d)
+	# 进化时只提交 growth_stage：先读再写，保留 generation / map_id / best_* 等生涯字段。
+	# 注意：死亡结算（generation+1、best_*）的唯一权威仍是 Main，这里绝不写那些字段，
+	# 否则会与 Main 的整快照提交形成双写竞争。
+	var profile: PlayerProfile = SaveRepository.load_profile()
+	profile.growth_stage = growth_stage
+	SaveRepository.save_profile(profile)
 
 
 # ================= 工具 =================

@@ -145,28 +145,28 @@ func _on_species_selected(species_id: String, is_continue: bool) -> void:
 
 
 func _continue_game() -> void:
-	var d: Dictionary = SaveManager.load_save()
-	_map_def = Maps.by_id(d.get("map_id", Maps.DEFAULT_MAP_ID))
+	# 续档只读 Repository：Main 是启动路径上的唯一业务写入者（新开局时写盘）
+	var profile: PlayerProfile = SaveRepository.load_profile()
+	_map_def = Maps.by_id(profile.map_id)
 	day_night.set_map_def(_map_def)
 	director.set_map_def(_map_def)
-	var sid: String = d.get("species_id", DinoSpecies.ID_RAPTOR)
-	_start_game(sid, true)
+	_start_game(profile.species_id, true)
 
 
 func _start_game(species_id: String, is_continue: bool) -> void:
-	var d: Dictionary = SaveManager.load_save()
+	var profile: PlayerProfile = SaveRepository.load_profile()
 	var stage: int = 0
 	var gen: int = 1
-	if is_continue and d.has("species_id"):
-		species_id = d["species_id"]
-		stage = d.get("growth_stage", 0)
-		gen = d.get("generation", 1)
+	if is_continue and SaveRepository.has_progress():
+		stage = profile.growth_stage
+		gen = profile.generation
 	else:
-		d["species_id"] = species_id
-		d["growth_stage"] = 0
-		d["generation"] = 1
-		d["map_id"] = _map_def.id
-		SaveManager.write_save(d)
+		# 新开一局：整快照提交（保留 best_* 生涯记录，只重置本局身份）
+		profile.species_id = species_id
+		profile.growth_stage = 0
+		profile.generation = 1
+		profile.map_id = _map_def.id
+		SaveRepository.save_profile(profile)
 		gen = 1
 
 	score_keeper.reset()
@@ -507,15 +507,16 @@ func _on_player_died() -> void:
 	if is_over:
 		return
 	is_over = true
-	# 存档：保留成长，代际 +1，记录最佳成绩
-	var d: Dictionary = SaveManager.load_save()
-	d["species_id"] = player.species.id
-	d["growth_stage"] = player.growth_stage
-	d["generation"] = player.generation + 1
-	d["best_time"] = maxi(d.get("best_time", 0), int(score_keeper.survival_time))
-	d["best_kills"] = maxi(d.get("best_kills", 0), score_keeper.kill_count)
-	SaveManager.write_save(d)
-	var best: String = "最佳存活 %d 秒 / 最多击杀 %d" % [d.get("best_time", 0), d.get("best_kills", 0)]
+	# 死亡结算：Main 是唯一权威写入者。先读当前档（进化可能已写过 growth_stage），
+	# 再一次性提交完整快照：保留成长、代际 +1、best_* 只增不减
+	var profile: PlayerProfile = SaveRepository.load_profile()
+	profile.species_id = player.species.id
+	profile.growth_stage = player.growth_stage
+	profile.generation = player.generation + 1
+	profile.best_time = maxi(profile.best_time, int(score_keeper.survival_time))
+	profile.best_kills = maxi(profile.best_kills, score_keeper.kill_count)
+	SaveRepository.save_profile(profile)
+	var best: String = "最佳存活 %d 秒 / 最多击杀 %d" % [profile.best_time, profile.best_kills]
 	hud.show_death("你被猎杀了！\n第 %d 代 · 存活 %d 秒 · 击杀 %d\n成长已保留，下一局继续变强\n%s" % [player.generation, int(score_keeper.survival_time), score_keeper.kill_count, best])
 	await get_tree().create_timer(3.5).timeout
 	# 不整场景重载：地形/植被等世界资产无需重建，移动端可避免死亡后数秒卡顿，仅重置运行期节点
@@ -557,10 +558,10 @@ func _restart_run() -> void:
 	# 世界资产自开局起已完整，重开后保持 _process 的补员/计分/技能通道开启
 	_game_started = true
 	# 3) 从存档读回成长（死亡时已写盘：generation 已 +1）
-	var d: Dictionary = SaveManager.load_save()
-	var sid: String = d.get("species_id", DinoSpecies.ID_RAPTOR)
-	var stage: int = d.get("growth_stage", 0)
-	var gen: int = d.get("generation", 1)
+	var profile: PlayerProfile = SaveRepository.load_profile()
+	var sid: String = profile.species_id
+	var stage: int = profile.growth_stage
+	var gen: int = profile.generation
 	# 3.5) 跨代重生：上一代留下的玩家蛋还在 → 从蛋的位置出生，
 	#      成长取“蛋快照与存档较大者”（蛋快照早于死亡存档时以存档为准）
 	var egg := _find_player_egg()
